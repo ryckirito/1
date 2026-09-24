@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-symbols", type=int, help="联网数据源最多拉取多少只股票")
     run.add_argument("--top-n", type=int, help="推荐条数")
     run.add_argument("--capital", type=float, help="账户总资金（美元），用于仓位计算")
+    run.add_argument("--dump-history", help="把本次加载到的行情写成 CSV（可作为 csv 数据源复算）")
     run.add_argument("--notify", action="store_true", help="生成后推送到配置的 webhook")
     run.add_argument("--print", dest="print_md", action="store_true", help="同时把 Markdown 打印到终端")
 
@@ -66,7 +67,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         "recommend": {"top_n": args.top_n, "capital": args.capital},
     }
     cfg = load_config(args.config, overrides)
-    report = run_pipeline(cfg, date=args.date)
+    report = run_pipeline(cfg, date=args.date, dump_history=args.dump_history)
     written = write_report(report, cfg.report)
     for fmt, path in written.items():
         print(f"[{fmt}] {path}")

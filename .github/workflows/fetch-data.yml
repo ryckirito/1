@@ -1,0 +1,58 @@
+name: fetch-data
+
+# 在 GitHub 云端拉取真实行情并生成日报，把行情快照与报告推到 data-snapshot 分支，
+# 供无法直连行情接口的环境拉取复算。
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 数据源
+        default: yfinance
+        type: choice
+        options: [yfinance, stooq]
+      universe:
+        description: 股票池（builtin / nasdaq / 文件路径）
+        default: builtin
+        type: string
+      max_symbols:
+        description: 最多拉取多少只
+        default: "300"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 拉取行情并生成日报
+        run: |
+          python -m daily_report run \
+            --source "${{ inputs.source }}" \
+            --universe "${{ inputs.universe }}" \
+            --max-symbols "${{ inputs.max_symbols }}" \
+            --out snapshot/reports \
+            --dump-history snapshot/history.csv
+          ls -la snapshot snapshot/reports
+      - name: 推送到 data-snapshot 分支
+        run: |
+          cd snapshot
+          git init -q
+          git checkout -q -b data-snapshot
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "snapshot: ${{ inputs.source }} $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-snapshot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-${{ github.run_id }}
+          path: snapshot/
+          retention-days: 14

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
@@ -145,8 +146,8 @@ def build_overview(enriched: dict[str, pd.DataFrame], date: pd.Timestamp, cfg: C
     )
 
 
-def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | None = None) -> DailyReport:
-    """执行完整流水线。hist 传入时跳过取数（用于测试或离线复算）。"""
+def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | None = None, dump_history: str | None = None) -> DailyReport:
+    """执行完整流水线。hist 传入时跳过取数（用于测试或离线复算）；dump_history 指定路径时把加载到的行情写成 CSV。"""
     end = date or dt.date.today()
     start = end - dt.timedelta(days=cfg.data.history_days)
     provider = make_provider(cfg.data)
@@ -157,6 +158,11 @@ def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | 
     hist = hist[hist["date"].dt.date <= end]
     if hist.empty:
         raise RuntimeError("行情数据为空")
+    if dump_history:
+        out = Path(dump_history)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        hist.to_csv(out, index=False, date_format="%Y-%m-%d")
+        log.info("行情快照已写入 %s（%d 只，%d 行）", out, hist["code"].nunique(), len(hist))
     report_date = pd.Timestamp(hist["date"].max())
     if report_date.date() != end:
         log.warning("请求日期 %s 无行情，使用最近交易日 %s", end, report_date.date())
