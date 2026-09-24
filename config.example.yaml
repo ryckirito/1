@@ -1,0 +1,52 @@
+# 复制为 config.yaml 后按需修改；未写的字段使用默认值。
+data:
+  source: eastmoney          # demo | csv | eastmoney | akshare
+  csv_dir: data/csv          # source=csv 时的目录
+  cache_dir: data/cache      # 联网数据源的本地缓存，可为空字符串关闭
+  history_days: 160          # 拉取多少个自然日历史
+  max_symbols: 300           # 联网数据源：按成交额取前 N 只 + 涨跌幅/量比极端股 + 自选
+  request_interval: 0.05     # 联网请求间隔秒
+  watchlist:                 # 自选股：无论如何都参与计算
+    - "600519"
+    - "300750"
+
+anomaly:
+  big_move_pct: 7.0          # 大涨/大跌阈值（%）
+  volume_ratio_window: 5     # 量比基准天数
+  volume_spike_ratio: 3.0    # 放量阈值
+  volume_dry_ratio: 0.35     # 缩量阈值
+  breakout_window: 60        # 新高/新低回看天数
+  gap_pct: 3.0               # 跳空缺口阈值（%）
+  amplitude_pct: 8.0         # 振幅阈值（%）
+  zscore_window: 60
+  zscore_threshold: 3.0
+  turnover_pct: 15.0         # 换手率阈值（有换手率数据时生效）
+  max_items: 40
+
+recommend:
+  capital: 1000000           # 总资金（元）
+  risk_per_trade_pct: 1.0    # 单笔最大亏损占总资金 %
+  max_position_pct: 20.0     # 单只最大仓位 %
+  top_n: 10
+  min_score: 60
+  min_avg_amount: 50000000   # 20 日均成交额下限（元）
+  max_atr_pct: 6.0
+  rsi_low: 45
+  rsi_high: 72
+  momentum_window: 20
+  momentum_min_pct: 0
+  momentum_max_pct: 30
+  pullback_band_pct: 3.0
+  stop_atr_mult: 2.0
+  reward_risk: 2.0
+  exclude_st: true
+  exclude_limit_up: true
+
+report:
+  out_dir: reports
+  formats: [md, html, json]
+  title: A 股每日异动与建仓日报
+
+notify:
+  webhook_url: ""            # 钉钉/企业微信机器人地址，留空不推送
+  kind: generic              # generic | dingtalk | wecom

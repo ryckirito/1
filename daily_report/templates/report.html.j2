@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} {{ r.date }}</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#e5e5e5; --up:#c62828; --down:#2e7d32; --accent:#1e5fb3; --card:#f7f8fa; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111418; --fg:#e8e8e8; --muted:#9a9a9a; --line:#2b2f36; --up:#ef5350; --down:#66bb6a; --accent:#6ea8ff; --card:#1a1e24; } }
+  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; max-width:1100px; margin-inline:auto; }
+  h1 { font-size:24px; margin:0 0 4px; } h2 { font-size:18px; margin:32px 0 12px; border-left:4px solid var(--accent); padding-left:10px; }
+  .meta { color:var(--muted); font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .card .k { color:var(--muted); font-size:12px; } .card .v { font-size:20px; font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th,td { padding:6px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  th:nth-child(-n+3), td:nth-child(-n+3) { text-align:left; }
+  .wrap { overflow-x:auto; }
+  .up { color:var(--up); } .down { color:var(--down); }
+  .tag { display:inline-block; padding:1px 6px; margin:1px 2px; border-radius:4px; background:var(--card); border:1px solid var(--line); font-size:12px; }
+  .rec { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:10px 0; }
+  .rec h3 { margin:0 0 6px; font-size:16px; } .rec ul { margin:6px 0 0 18px; padding:0; }
+  .plan { font-weight:600; }
+  .disclaimer { color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:12px; margin-top:32px; }
+</style>
+</head>
+<body>
+<h1>{{ title }} · {{ r.date }}</h1>
+<div class="meta">数据源 {{ r.source }} ｜ 生成时间 {{ r.generated_at }} ｜ 覆盖 {{ r.overview.total }} 只股票 ｜ 仅供研究参考，不构成投资建议</div>
+
+<h2>一、市场概览</h2>
+<div class="grid">
+  <div class="card"><div class="k">上涨 / 下跌 / 平盘</div><div class="v"><span class="up">{{ r.overview.up }}</span> / <span class="down">{{ r.overview.down }}</span> / {{ r.overview.flat }}</div></div>
+  <div class="card"><div class="k">涨停 / 跌停</div><div class="v"><span class="up">{{ r.overview.limit_up }}</span> / <span class="down">{{ r.overview.limit_down }}</span></div></div>
+  <div class="card"><div class="k">涨跌幅中位数</div><div class="v {{ 'up' if r.overview.median_pct > 0 else 'down' }}">{{ r.overview.median_pct | pct }}</div></div>
+  <div class="card"><div class="k">合计成交额</div><div class="v">{{ r.overview.total_amount | amount }}</div><div class="k">较前一日 {{ r.overview.amount_change_pct | pct }}</div></div>
+  <div class="card"><div class="k">站上 MA20 比例</div><div class="v">{{ r.overview.above_ma20_pct | num(1) }}%</div></div>
+</div>
+{% if r.overview.top_gainers %}
+<p><b>涨幅前五</b>：{% for g in r.overview.top_gainers %}{{ g.name }}({{ g.code }}) <span class="up">{{ g.pct_chg | pct }}</span>{{ "、" if not loop.last }}{% endfor %}</p>
+<p><b>跌幅前五</b>：{% for g in r.overview.top_losers %}{{ g.name }}({{ g.code }}) <span class="down">{{ g.pct_chg | pct }}</span>{{ "、" if not loop.last }}{% endfor %}</p>
+{% endif %}
+
+<h2>二、异动榜（{{ r.anomalies | length }} 条）</h2>
+{% if r.anomalies %}
+<div class="wrap"><table>
+<thead><tr><th>#</th><th>代码</th><th>名称</th><th>板块</th><th>收盘</th><th>涨跌幅</th><th>量比</th><th>成交额</th><th style="text-align:left">异动标签</th><th>强度</th></tr></thead>
+<tbody>
+{% for a in r.anomalies %}
+<tr title="{{ a.details | join('；') }}">
+  <td>{{ loop.index }}</td><td>{{ a.code }}</td><td>{{ a.name }}</td><td>{{ a.board }}</td>
+  <td>{{ a.close | num }}</td><td class="{{ 'up' if a.pct_chg > 0 else 'down' }}">{{ a.pct_chg | pct }}</td>
+  <td>{{ a.vol_ratio | num(1) }}</td><td>{{ a.amount | amount }}</td>
+  <td style="text-align:left">{% for t in a.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td><td>{{ a.score | num(0) }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<details><summary>异动明细</summary><ul>
+{% for a in r.anomalies %}
+<li><b>{{ a.name }}（{{ a.code }}）</b>{% if a.industry %} · {{ a.industry }}{% endif %}：{{ a.details | join("；") }}</li>
+{% endfor %}
+</ul></details>
+{% else %}
+<p>今日无符合阈值的异动。</p>
+{% endif %}
+
+<h2>三、推荐建仓（{{ r.recommendations | length }} 条）</h2>
+{% if r.recommendations %}
+<div class="wrap"><table>
+<thead><tr><th>#</th><th>代码</th><th>名称</th><th>评分</th><th>形态</th><th>收盘</th><th>建议入场</th><th>止损</th><th>目标</th><th>风险</th><th>盈亏比</th><th>建议股数</th><th>仓位</th></tr></thead>
+<tbody>
+{% for x in r.recommendations %}
+<tr><td>{{ loop.index }}</td><td>{{ x.code }}</td><td>{{ x.name }}</td><td><b>{{ x.score | num(0) }}</b></td><td>{{ x.setup }}</td>
+<td>{{ x.close | num }}</td><td>{{ x.entry | num }}</td><td class="down">{{ x.stop_loss | num }}</td><td class="up">{{ x.target | num }}</td>
+<td>{{ x.risk_pct | num(1) }}%</td><td>1:{{ x.reward_risk | num(1) }}</td><td>{{ x.shares }}</td><td>{{ x.position_pct | num(1) }}%</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% for x in r.recommendations %}
+<div class="rec">
+  <h3>{{ loop.index }}. {{ x.name }}（{{ x.code }}） <span class="meta">{{ x.board }}{% if x.industry %} · {{ x.industry }}{% endif %} · 评分 {{ x.score | num(0) }}（趋势 {{ x.factors.trend }} / 动量 {{ x.factors.momentum }} / 量能 {{ x.factors.volume }} / RSI {{ x.factors.rsi }} / 形态 {{ x.factors.pattern }}）</span></h3>
+  <ul>
+  {% for reason in x.reasons %}<li>{{ reason }}</li>{% endfor %}
+  <li>关键位：MA20 {{ x.ma20 | num }} ｜ MA60 {{ x.ma60 | num }} ｜ RSI14 {{ x.rsi14 | num(0) }} ｜ 20 日涨幅 {{ x.ret20 | pct(1) }} ｜ ATR {{ x.atr_pct | num(1) }}%</li>
+  <li class="plan">计划：{{ x.entry | num }} 附近建仓 {{ x.shares }} 股（约 {{ x.position_value | amount }}，占资金 {{ x.position_pct | num(1) }}%），跌破 {{ x.stop_loss | num }} 止损，目标 {{ x.target | num }}</li>
+  </ul>
+</div>
+{% endfor %}
+{% else %}
+<p>今日没有评分达到 {{ r.config.recommend.min_score }} 分的标的，建议观望。</p>
+{% endif %}
+
+<div class="disclaimer">
+<p><b>风险提示</b></p>
+<ul>
+<li>异动与推荐均基于历史量价数据的规则计算，不包含基本面、消息面与资金面信息。</li>
+<li>建议仓位按总资金 {{ r.config.recommend.capital | amount }}、单笔风险 {{ r.config.recommend.risk_per_trade_pct }}% 计算，请根据自身情况调整。</li>
+<li>涨停股次日往往难以成交，已从推荐中排除；异动榜中的跌停、破位股票请注意风险。</li>
+<li>本报告不构成任何投资建议，据此操作风险自负。</li>
+</ul>
+</div>
+</body>
+</html>

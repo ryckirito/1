@@ -1,0 +1,48 @@
+name: daily-report
+
+on:
+  schedule:
+    # 北京时间工作日 15:40（UTC 07:40）
+    - cron: "40 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 数据源
+        default: eastmoney
+        type: choice
+        options: [eastmoney, akshare, demo]
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 生成配置
+        run: |
+          if [ ! -f config.yaml ]; then cp config.example.yaml config.yaml; fi
+          if [ -n "${WEBHOOK_URL}" ]; then
+            python - <<'PY'
+          import os, yaml
+          cfg = yaml.safe_load(open("config.yaml", encoding="utf-8")) or {}
+          cfg.setdefault("notify", {})
+          cfg["notify"]["webhook_url"] = os.environ["WEBHOOK_URL"]
+          cfg["notify"]["kind"] = os.environ.get("WEBHOOK_KIND") or "generic"
+          yaml.safe_dump(cfg, open("config.yaml", "w", encoding="utf-8"), allow_unicode=True)
+          PY
+          fi
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_KIND: ${{ secrets.WEBHOOK_KIND }}
+      - name: 运行日报
+        run: |
+          python -m daily_report run --config config.yaml --source "${{ github.event.inputs.source || 'eastmoney' }}" --notify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daily-report-${{ github.run_id }}
+          path: reports/
+          retention-days: 30
