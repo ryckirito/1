@@ -8,3 +8,5 @@ reports/
 data/cache/
 config.yaml
 .env
+data/snapshot/
+data/snapshot_csv/
