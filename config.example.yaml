@@ -25,6 +25,7 @@ anomaly:
   amplitude_pct: 6.0         # 振幅阈值（%）
   zscore_window: 60
   zscore_threshold: 3.0
+  min_score: 10              # 异动强度门槛，安静日只显示真正的异动
   max_items: 40
 
 recommend:

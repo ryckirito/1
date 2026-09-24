@@ -24,7 +24,7 @@ python -m daily_report gen-demo --out data/csv      # 生成一份示例 CSV 看
 python -m daily_report run --source csv --csv-dir data/csv
 ```
 
-报告写到 `reports/<日期>.md|html|json`，同时更新 `reports/latest.*`。示例输出见 `docs/sample_report.md` / `docs/sample_report.html`（demo 数据生成）。
+报告写到 `reports/<日期>.md|html|json`，同时更新 `reports/latest.*`。示例输出见 `docs/sample_report.md` / `docs/sample_report.html`（由 GitHub Actions 用 Yahoo Finance 真实行情生成）。
 
 常用参数：`--date 2026-09-24`（默认今天，非交易日自动回退到最近交易日）、`--universe nasdaq`、`--max-symbols 500`、`--top-n 5`、`--capital 50000`、`--formats md,html`、`--notify`、`-v`。
 
@@ -82,6 +82,17 @@ python -m daily_report run --source csv --csv-dir data/csv
 或直接用 `scripts/run_daily.sh`（自带日志目录与虚拟环境激活）。
 
 **GitHub Actions**：仓库自带 `.github/workflows/daily.yml`，工作日 UTC 21:30 自动运行并把报告作为 artifact 上传；在仓库 Secrets 里配置 `WEBHOOK_URL` / `WEBHOOK_KIND` 即可同时推送。
+
+## 本机无法访问行情接口时
+
+`.github/workflows/fetch-data.yml` 可在 GitHub 云端拉取行情并生成日报，然后把行情快照 `history.csv` 和报告一起强推到 `data-snapshot` 分支。在 Actions 页面手动运行它（或用 API 触发），之后在任何只能访问 GitHub 的环境里：
+
+```bash
+bash scripts/pull_snapshot.sh            # 拉取快照，并用 csv 数据源在本地复算
+bash scripts/pull_snapshot.sh --top-n 5  # 可附加任意 run 参数
+```
+
+`--dump-history` 选项也可以单独使用：`python -m daily_report run --source yfinance --dump-history data/history.csv`，把一次联网拉到的行情存下来，之后离线用 `--source csv` 反复调参复算。
 
 ## 推送
 

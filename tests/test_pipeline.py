@@ -26,7 +26,8 @@ def test_pipeline_demo_end_to_end(tmp_path):
     report = run_pipeline(cfg, date=dt.date(2026, 9, 24))
     assert report.date == "2026-09-24"
     o = report.overview
-    assert o.total == 40                      # 基准 SPY/QQQ 不计入
+    assert o.total == 40                      # 基准 SPY/QQQ 不计入，ETF 板块不计入
+    assert all(s["sector"] != "ETF" for s in o.sectors)
     assert {b["code"] for b in o.benchmarks} == {"SPY", "QQQ"}
     assert o.up + o.down + o.flat == 40
     assert o.sectors and all(s["count"] > 0 for s in o.sectors)

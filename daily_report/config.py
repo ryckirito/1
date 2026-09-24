@@ -21,6 +21,7 @@ class AnomalyConfig:
     amplitude_pct: float = 6.0          # 振幅 (high-low)/prev_close 百分比
     zscore_window: int = 60             # 收益率 z-score 回看天数
     zscore_threshold: float = 3.0       # |z| >= 该值视为统计异常
+    min_score: float = 10.0             # 强度低于该值的异动不展示（单个 20 日新高/新低或缩量约 5~8 分）
     max_items: int = 40                 # 报告中最多展示多少条异动
 
 

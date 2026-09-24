@@ -56,7 +56,8 @@ def test_short_window_new_high_when_history_short():
 
 def test_volume_dry(history):
     df = _last(history, volume=1e5)
-    a = detect_symbol(enrich(df), AnomalyConfig())
+    assert detect_symbol(enrich(df), AnomalyConfig()) is None  # 单独缩量低于强度门槛
+    a = detect_symbol(enrich(df), AnomalyConfig(min_score=0))
     assert a is not None and a.tags == ["缩量"]
 
 

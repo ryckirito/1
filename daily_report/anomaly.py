@@ -135,7 +135,7 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
         details.append(f"当日收益率 z-score {z:+.1f}（相对近 {cfg.zscore_window} 日）")
         score += 8
 
-    if not tags:
+    if not tags or score < cfg.min_score:
         return None
 
     direction = "up" if pct > 0.5 else "down" if pct < -0.5 else "neutral"

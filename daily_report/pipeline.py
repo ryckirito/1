@@ -81,7 +81,8 @@ def _rec(r: pd.Series) -> dict[str, Any]:
     return {"code": r["code"], "name": r["name"], "pct_chg": round(float(r["pct_chg"]), 2), "close": round(float(r["close"]), 2)}
 
 
-def build_overview(enriched: dict[str, pd.DataFrame], date: pd.Timestamp, cfg: Config, benchmarks: set[str]) -> MarketOverview:
+def build_overview(enriched: dict[str, pd.DataFrame], date: pd.Timestamp, cfg: Config, benchmarks: set[str], excluded: set[str] | None = None) -> MarketOverview:
+    excluded = excluded or benchmarks
     rows = []
     bench_rows = []
     for code, df in enriched.items():
@@ -92,6 +93,8 @@ def build_overview(enriched: dict[str, pd.DataFrame], date: pd.Timestamp, cfg: C
             bench_rows.append({"code": code, "name": last["name"], "pct_chg": round(float(last["pct_chg"]), 2), "close": round(float(last["close"]), 2),
                                "ret5": round(float(last["ret5"]), 2) if not np.isnan(last["ret5"]) else None,
                                "ret20": round(float(last["ret20"]), 2) if not np.isnan(last["ret20"]) else None})
+            continue
+        if code in excluded:
             continue
         rows.append(
             {
@@ -171,10 +174,13 @@ def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | 
 
     enriched = enrich_panel(hist, cfg)
     benchmarks = {normalize_ticker(t) for t in cfg.data.benchmarks}
+    # 基准 ETF 与股票池里标为 ETF 的标的都不参与异动、推荐与个股统计
+    etfs = {c for c, df in enriched.items() if str(df["sector"].iloc[-1] if "sector" in df.columns else "") == "ETF"}
+    excluded = benchmarks | etfs
     log.info("共 %d 只标的参与计算（含基准 %d 只）", len(enriched), len(benchmarks & set(enriched)))
-    anomalies = detect_all(enriched, cfg.anomaly, exclude=benchmarks)[: cfg.anomaly.max_items]
-    recs = recommend_all(enriched, cfg.recommend, exclude=benchmarks)
-    overview = build_overview(enriched, report_date, cfg, benchmarks)
+    anomalies = detect_all(enriched, cfg.anomaly, exclude=excluded)[: cfg.anomaly.max_items]
+    recs = recommend_all(enriched, cfg.recommend, exclude=excluded)
+    overview = build_overview(enriched, report_date, cfg, benchmarks, excluded)
     log.info("异动 %d 条，推荐 %d 条", len(anomalies), len(recs))
     return DailyReport(
         date=report_date.strftime("%Y-%m-%d"),
