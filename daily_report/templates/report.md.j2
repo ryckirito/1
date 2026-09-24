@@ -5,18 +5,27 @@
 
 ## 一、市场概览
 
+{% if r.overview.benchmarks %}
+**基准**：{% for b in r.overview.benchmarks %}{{ b.code }} {{ b.close | num }}（{{ b.pct_chg | pct }}，5 日 {{ b.ret5 | pct(1) }}，20 日 {{ b.ret20 | pct(1) }}）{{ "；" if not loop.last }}{% endfor %}
+
+{% endif %}
 | 指标 | 数值 |
 |---|---|
 | 上涨 / 下跌 / 平盘 | {{ r.overview.up }} / {{ r.overview.down }} / {{ r.overview.flat }} |
-| 涨停 / 跌停 | {{ r.overview.limit_up }} / {{ r.overview.limit_down }} |
+| 涨超 {{ r.config.anomaly.big_move_pct | num(0) }}% / 跌超 {{ r.config.anomaly.big_move_pct | num(0) }}% | {{ r.overview.big_up }} / {{ r.overview.big_down }} |
+| 52 周新高 / 新低 | {{ r.overview.new_high_52w }} / {{ r.overview.new_low_52w }} |
 | 涨跌幅中位数 / 均值 | {{ r.overview.median_pct | pct }} / {{ r.overview.mean_pct | pct }} |
-| 合计成交额（较前一日） | {{ r.overview.total_amount | amount }}（{{ r.overview.amount_change_pct | pct }}） |
-| 站上 MA20 比例 | {{ r.overview.above_ma20_pct | num(1) }}% |
+| 合计成交额（较前一日） | {{ r.overview.total_amount | usd }}（{{ r.overview.amount_change_pct | pct }}） |
+| 站上 MA50 / MA200 比例 | {{ r.overview.above_ma50_pct | num(1) }}% / {{ r.overview.above_ma200_pct | num(1) }}% |
 
 {% if r.overview.top_gainers %}
-**涨幅前五**：{% for g in r.overview.top_gainers %}{{ g.name }}({{ g.code }}) {{ g.pct_chg | pct }}{{ "、" if not loop.last }}{% endfor %}
+**涨幅前五**：{% for g in r.overview.top_gainers %}{{ g.code }} {{ g.name }} {{ g.pct_chg | pct }}{{ "、" if not loop.last }}{% endfor %}
 
-**跌幅前五**：{% for g in r.overview.top_losers %}{{ g.name }}({{ g.code }}) {{ g.pct_chg | pct }}{{ "、" if not loop.last }}{% endfor %}
+**跌幅前五**：{% for g in r.overview.top_losers %}{{ g.code }} {{ g.name }} {{ g.pct_chg | pct }}{{ "、" if not loop.last }}{% endfor %}
+{% endif %}
+{% if r.overview.sectors %}
+
+**板块平均涨跌幅**：{% for s in r.overview.sectors %}{{ s.sector }} {{ s.mean_pct | pct }}{{ "、" if not loop.last }}{% endfor %}
 {% endif %}
 
 ## 二、异动榜（{{ r.anomalies | length }} 条）
@@ -25,14 +34,14 @@
 | # | 代码 | 名称 | 板块 | 收盘 | 涨跌幅 | 量比 | 成交额 | 异动标签 | 强度 |
 |---|---|---|---|---|---|---|---|---|---|
 {% for a in r.anomalies %}
-| {{ loop.index }} | {{ a.code }} | {{ a.name }} | {{ a.board }} | {{ a.close | num }} | {{ a.pct_chg | pct }} | {{ a.vol_ratio | num(1) }} | {{ a.amount | amount }} | {{ a.tags | join(" · ") }} | {{ a.score | num(0) }} |
+| {{ loop.index }} | {{ a.code }} | {{ a.name }} | {{ a.sector }} | {{ a.close | num }} | {{ a.pct_chg | pct }} | {{ a.vol_ratio | num(1) }} | {{ a.amount | usd }} | {{ a.tags | join(" · ") }} | {{ a.score | num(0) }} |
 {% endfor %}
 
 <details>
 <summary>异动明细</summary>
 
 {% for a in r.anomalies %}
-- **{{ a.name }}（{{ a.code }}）**{% if a.industry %} · {{ a.industry }}{% endif %}：{{ a.details | join("；") }}
+- **{{ a.code }} {{ a.name }}**{% if a.sector %} · {{ a.sector }}{% endif %}：{{ a.details | join("；") }}
 {% endfor %}
 
 </details>
@@ -46,19 +55,19 @@
 | # | 代码 | 名称 | 评分 | 形态 | 收盘 | 建议入场 | 止损 | 目标 | 风险 | 盈亏比 | 建议股数 | 仓位 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 {% for x in r.recommendations %}
-| {{ loop.index }} | {{ x.code }} | {{ x.name }} | {{ x.score | num(0) }} | {{ x.setup }} | {{ x.close | num }} | {{ x.entry | num }} | {{ x.stop_loss | num }} | {{ x.target | num }} | {{ x.risk_pct | num(1) }}% | 1:{{ x.reward_risk | num(1) }} | {{ x.shares }} | {{ x.position_pct | num(1) }}% |
+| {{ loop.index }} | {{ x.code }} | {{ x.name }} | {{ x.score | num(0) }} | {{ x.setup }} | {{ x.close | num }} | {{ x.entry | num }} | {{ x.stop_loss | num }} | {{ x.target | num }} | {{ x.risk_pct | num(1) }}% | 1:{{ x.reward_risk | num(1) }} | {{ x.shares | shares }} | {{ x.position_pct | num(1) }}% |
 {% endfor %}
 
 ### 推荐理由
 
 {% for x in r.recommendations %}
-**{{ loop.index }}. {{ x.name }}（{{ x.code }}）** · {{ x.board }}{% if x.industry %} · {{ x.industry }}{% endif %} · 评分 {{ x.score | num(0) }}（趋势 {{ x.factors.trend }} / 动量 {{ x.factors.momentum }} / 量能 {{ x.factors.volume }} / RSI {{ x.factors.rsi }} / 形态 {{ x.factors.pattern }}）
+**{{ loop.index }}. {{ x.code }} {{ x.name }}**{% if x.sector %} · {{ x.sector }}{% endif %} · 评分 {{ x.score | num(0) }}（趋势 {{ x.factors.trend }} / 动量 {{ x.factors.momentum }} / 量能 {{ x.factors.volume }} / RSI {{ x.factors.rsi }} / 形态 {{ x.factors.pattern }}）
 
 {% for reason in x.reasons %}
 - {{ reason }}
 {% endfor %}
-- 关键位：MA20 {{ x.ma20 | num }} ｜ MA60 {{ x.ma60 | num }} ｜ RSI14 {{ x.rsi14 | num(0) }} ｜ 20 日涨幅 {{ x.ret20 | pct(1) }} ｜ ATR {{ x.atr_pct | num(1) }}%
-- 计划：{{ x.entry | num }} 附近建仓 {{ x.shares }} 股（约 {{ x.position_value | amount }}，占资金 {{ x.position_pct | num(1) }}%），跌破 {{ x.stop_loss | num }} 止损，目标 {{ x.target | num }}
+- 关键位：MA20 {{ x.ma20 | num }} ｜ MA50 {{ x.ma50 | num }} ｜ MA200 {{ x.ma200 | num }} ｜ RSI14 {{ x.rsi14 | num(0) }} ｜ 20 日涨幅 {{ x.ret20 | pct(1) }} ｜ ATR {{ x.atr_pct | num(1) }}%
+- 计划：${{ x.entry | num }} 附近买入 {{ x.shares | shares }} 股（约 {{ x.position_value | usd }}，占资金 {{ x.position_pct | num(1) }}%），跌破 ${{ x.stop_loss | num }} 止损，目标 ${{ x.target | num }}
 
 {% endfor %}
 {% else %}
@@ -67,7 +76,7 @@
 
 ## 四、风险提示
 
-- 异动与推荐均基于历史量价数据的规则计算，不包含基本面、消息面与资金面信息。
-- 建议仓位按总资金 {{ r.config.recommend.capital | amount }}、单笔风险 {{ r.config.recommend.risk_per_trade_pct }}% 计算，请根据自身情况调整。
-- 涨停股次日往往难以成交，已从推荐中排除；异动榜中的跌停、破位股票请注意风险。
+- 异动与推荐均基于历史量价数据的规则计算，不包含基本面、财报、宏观与消息面信息。
+- 建议仓位按总资金 {{ r.config.recommend.capital | usd }}、单笔风险 {{ r.config.recommend.risk_per_trade_pct }}% 计算，请根据自身情况调整。
+- 美股无涨跌停限制，财报、指引、宏观数据可能造成隔夜跳空，止损可能无法按计划价格成交。
 - 本报告不构成任何投资建议，据此操作风险自负。

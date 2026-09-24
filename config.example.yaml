@@ -1,52 +1,60 @@
 # 复制为 config.yaml 后按需修改；未写的字段使用默认值。
 data:
-  source: eastmoney          # demo | csv | eastmoney | akshare
-  csv_dir: data/csv          # source=csv 时的目录
-  cache_dir: data/cache      # 联网数据源的本地缓存，可为空字符串关闭
-  history_days: 160          # 拉取多少个自然日历史
-  max_symbols: 300           # 联网数据源：按成交额取前 N 只 + 涨跌幅/量比极端股 + 自选
-  request_interval: 0.05     # 联网请求间隔秒
+  source: yfinance           # demo | csv | yfinance | stooq
+  universe: builtin          # builtin（内置约 190 只大盘股）| nasdaq（Nasdaq 筛选器全市场按市值取前 N）| 自定义文件路径（txt 每行一个代码，或 csv 含 ticker,name,sector）
+  max_symbols: 300           # 股票池最多取多少只（不含自选与基准）
+  min_market_cap: 2000000000 # universe=nasdaq 时的市值下限（美元）
+  history_days: 420          # 拉取多少个自然日历史（覆盖 52 周与 MA200）
+  cache_dir: data/cache      # 本地缓存，可为空字符串关闭
+  request_interval: 0.2      # stooq 逐只请求的间隔秒
   watchlist:                 # 自选股：无论如何都参与计算
-    - "600519"
-    - "300750"
+    - AAPL
+    - NVDA
+  benchmarks: [SPY, QQQ]     # 基准 ETF：只在概览中展示，不参与异动与推荐
+  csv_dir: data/csv          # source=csv 时的目录
 
 anomaly:
-  big_move_pct: 7.0          # 大涨/大跌阈值（%）
-  volume_ratio_window: 5     # 量比基准天数
-  volume_spike_ratio: 3.0    # 放量阈值
-  volume_dry_ratio: 0.35     # 缩量阈值
-  breakout_window: 60        # 新高/新低回看天数
-  gap_pct: 3.0               # 跳空缺口阈值（%）
-  amplitude_pct: 8.0         # 振幅阈值（%）
+  big_move_pct: 5.0          # 大涨/大跌阈值（%）
+  huge_move_pct: 10.0        # 暴涨/暴跌阈值（%）
+  volume_ratio_window: 20    # 量比基准天数
+  volume_spike_ratio: 2.5    # 放量阈值
+  volume_dry_ratio: 0.4      # 缩量阈值
+  long_window: 250           # 52 周新高/新低回看交易日
+  short_window: 20           # 20 日新高/新低回看交易日
+  gap_pct: 2.0               # 跳空缺口阈值（%）
+  amplitude_pct: 6.0         # 振幅阈值（%）
   zscore_window: 60
   zscore_threshold: 3.0
-  turnover_pct: 15.0         # 换手率阈值（有换手率数据时生效）
   max_items: 40
 
 recommend:
-  capital: 1000000           # 总资金（元）
+  capital: 100000            # 总资金（美元）
   risk_per_trade_pct: 1.0    # 单笔最大亏损占总资金 %
-  max_position_pct: 20.0     # 单只最大仓位 %
+  max_position_pct: 15.0     # 单只最大仓位 %
   top_n: 10
   min_score: 60
-  min_avg_amount: 50000000   # 20 日均成交额下限（元）
-  max_atr_pct: 6.0
+  min_price: 5               # 股价下限，过滤仙股
+  min_avg_dollar_volume: 20000000   # 20 日均成交额下限（美元）
+  max_atr_pct: 5.0
   rsi_low: 45
   rsi_high: 72
   momentum_window: 20
   momentum_min_pct: 0
-  momentum_max_pct: 30
+  momentum_max_pct: 25
   pullback_band_pct: 3.0
   stop_atr_mult: 2.0
+  min_stop_pct: 3.0
   reward_risk: 2.0
-  exclude_st: true
-  exclude_limit_up: true
+  max_daily_gain_pct: 6.0
+  max_daily_loss_pct: 4.0
+  exclude_gap_down: true
+  fractional_shares: false   # 券商支持碎股时可改为 true
 
 report:
   out_dir: reports
   formats: [md, html, json]
-  title: A 股每日异动与建仓日报
+  title: 美股每日异动与建仓日报
 
 notify:
-  webhook_url: ""            # 钉钉/企业微信机器人地址，留空不推送
-  kind: generic              # generic | dingtalk | wecom
+  webhook_url: ""            # Slack / Discord / 钉钉 / 企业微信机器人地址，留空不推送
+  kind: generic              # generic | slack | discord | dingtalk | wecom

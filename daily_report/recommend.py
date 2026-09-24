@@ -1,12 +1,12 @@
 """推荐建仓：多因子评分 + 交易计划（入场 / 止损 / 目标 / 仓位）。
 
 评分维度（满分 100）：
-- 趋势 30：收盘 > MA20 > MA60 且 MA20 向上
+- 趋势 30：收盘 > MA50 > MA200（多头排列）且 MA20 向上；历史不足 200 日时退化为 MA20/MA50
 - 动量 20：20 日涨幅落在健康区间（涨太多视为追高）
-- 量能 15：当日量比 1.2~3 且收阳，或温和放量
+- 量能 15：当日温和放量收阳，或缩量回调
 - RSI  15：落在 rsi_low~rsi_high 区间
 - 形态 20：回踩 MA20 附近（低吸）或放量突破 20 日新高（追强）
-过滤：ST、涨停、流动性不足、波动过大、历史数据不足。
+过滤：仙股、流动性不足、波动过大、当日涨跌过大、跳空低开、历史数据不足。
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 
 from .config import RecommendConfig
-from .market import is_st, limit_pct, board_of
 
 
 @dataclass
@@ -33,15 +32,16 @@ class Recommendation:
     target: float
     risk_pct: float                 # (entry - stop)/entry * 100
     reward_risk: float
-    shares: int                     # 建议股数（100 股整数倍）
-    position_value: float           # 建议买入金额
+    shares: float                   # 建议股数
+    position_value: float           # 建议买入金额（美元）
     position_pct: float             # 占总资金百分比
     reasons: list[str] = field(default_factory=list)
     factors: dict[str, float] = field(default_factory=dict)
-    board: str = ""
-    industry: str = ""
+    sector: str = ""
+    market_cap: float = float("nan")
     ma20: float = 0.0
-    ma60: float = 0.0
+    ma50: float = 0.0
+    ma200: float = float("nan")
     rsi14: float = 0.0
     ret20: float = 0.0
     atr_pct: float = 0.0
@@ -57,11 +57,13 @@ def _f(x: Any) -> float:
         return float("nan")
 
 
+def _str(x: Any) -> str:
+    s = "" if x is None else str(x)
+    return "" if s in ("nan", "None") else s
+
+
 def _clip_score(value: float, lo: float, hi: float, max_points: float) -> float:
-    """value 在 [lo, hi] 内线性给分，越靠近 hi 分越高。"""
-    if np.isnan(value):
-        return 0.0
-    if value <= lo:
+    if np.isnan(value) or value <= lo:
         return 0.0
     if value >= hi:
         return max_points
@@ -74,30 +76,27 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         return None
     row = df.iloc[-1]
     code, name = str(row["code"]), str(row["name"])
-    if cfg.exclude_st and is_st(name):
-        return None
     close = _f(row["close"])
     pct = _f(row["pct_chg"])
-    if cfg.exclude_limit_up and pct >= limit_pct(code, name) * 0.98:
+    if close < cfg.min_price:
         return None
     if np.isnan(pct) or pct > cfg.max_daily_gain_pct or pct < -cfg.max_daily_loss_pct:
         return None
-    if cfg.exclude_gap_down and _f(row['open']) < _f(row.get('prev_low')):
+    if cfg.exclude_gap_down and _f(row["open"]) < _f(row.get("prev_low")):
         return None
-    ma20, ma60, ma5 = _f(row["ma20"]), _f(row["ma60"]), _f(row["ma5"])
-    slope = _f(row["ma20_slope"])
-    atr_pct = _f(row["atr_pct"])
-    atr14 = _f(row["atr14"])
+    ma20, ma50, ma200, ma5 = _f(row["ma20"]), _f(row["ma50"]), _f(row["ma200"]), _f(row["ma5"])
+    slope20 = _f(row["ma20_slope"])
+    atr_pct, atr14 = _f(row["atr_pct"]), _f(row["atr14"])
     rsi = _f(row["rsi14"])
     vr = _f(row["vol_ratio"])
     ret20 = _f(row["ret20"])
     avg_amt = _f(row["avg_amount20"])
-    hi20 = _f(df["high"].iloc[-21:-1].max()) if len(df) > 21 else float("nan")
+    hi20 = _f(row.get("hi_short"))
     low10 = _f(row["low10"])
 
-    if np.isnan(ma60) or np.isnan(atr14) or np.isnan(rsi):
+    if np.isnan(ma50) or np.isnan(atr14) or np.isnan(rsi):
         return None
-    if not np.isnan(avg_amt) and avg_amt < cfg.min_avg_amount:
+    if not np.isnan(avg_amt) and avg_amt < cfg.min_avg_dollar_volume:
         return None
     if atr_pct > cfg.max_atr_pct:
         return None
@@ -107,14 +106,21 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
 
     # 趋势 30
     trend = 0.0
-    if close > ma20 > ma60:
-        trend += 20
-        reasons.append("多头排列：收盘 > MA20 > MA60")
-    elif close > ma20 or close > ma60:
-        trend += 8
-    trend += _clip_score(slope, 0.0, 4.0, 10)
-    if slope > 0:
-        reasons.append(f"MA20 近 5 日上行 {slope:.1f}%")
+    if not np.isnan(ma200):
+        if close > ma50 > ma200:
+            trend += 20
+            reasons.append("多头排列：收盘 > MA50 > MA200")
+        elif close > ma50 or close > ma200:
+            trend += 8
+    else:
+        if close > ma20 > ma50:
+            trend += 14
+            reasons.append("短期多头排列：收盘 > MA20 > MA50")
+        elif close > ma50:
+            trend += 6
+    trend += _clip_score(slope20, 0.0, 4.0, 10)
+    if slope20 > 0:
+        reasons.append(f"MA20 近 5 日上行 {slope20:.1f}%")
     factors["trend"] = round(trend, 1)
 
     # 动量 20：区间内越靠近中点分越高（10~20 分），超过上限视为过热按超出幅度扣分
@@ -126,7 +132,6 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         mid = (cfg.momentum_min_pct + cfg.momentum_max_pct) / 2
         half = max(mid - cfg.momentum_min_pct, 1e-9)
         momentum = 10 + 10 * (1 - abs(ret20 - mid) / half)
-    if not np.isnan(ret20) and cfg.momentum_min_pct <= ret20 <= cfg.momentum_max_pct:
         reasons.append(f"20 日涨幅 {ret20:.1f}%，动量健康")
     factors["momentum"] = round(momentum, 1)
 
@@ -135,12 +140,12 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
     if not np.isnan(vr):
         if pct > 0 and 1.2 <= vr <= 3.0:
             volume_pts = 15
-            reasons.append(f"放量上涨，量比 {vr:.1f}")
+            reasons.append(f"放量上涨，成交量为 20 日均量的 {vr:.1f} 倍")
         elif pct > 0 and 1.0 <= vr < 1.2:
             volume_pts = 8
         elif pct <= 0 and vr < 0.9:
             volume_pts = 9
-            reasons.append(f"缩量回调，量比 {vr:.2f}")
+            reasons.append(f"缩量回调，成交量为 20 日均量的 {vr:.0%}")
         elif vr > 3.0 and pct > 0:
             volume_pts = 6
     factors["volume"] = round(volume_pts, 1)
@@ -158,7 +163,7 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
     setup = "趋势跟随"
     pattern_pts = 0.0
     dist_ma20 = (close / ma20 - 1) * 100 if not np.isnan(ma20) else float("nan")
-    if not np.isnan(dist_ma20) and -1.0 <= dist_ma20 <= cfg.pullback_band_pct and close > ma60 and slope > 0:
+    if not np.isnan(dist_ma20) and -1.0 <= dist_ma20 <= cfg.pullback_band_pct and close > ma50 and slope20 > 0:
         pattern_pts = 20
         setup = "回踩低吸"
         reasons.append(f"收盘距 MA20 仅 {dist_ma20:+.1f}%，回踩均线支撑")
@@ -175,23 +180,22 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         return None
 
     # 交易计划
-    entry = close if setup != "回踩低吸" else round(max(ma20, close * 0.99), 2)
+    # 回踩低吸：挂在 MA20 与收盘之间偏低的位置；其余按收盘价
+    entry = close if (setup != "回踩低吸" or close <= ma20) else round(max(ma20, close * 0.99), 2)
     stop_atr = entry - cfg.stop_atr_mult * atr14
     stop = max(stop_atr, low10) if not np.isnan(low10) else stop_atr
-    stop = min(stop, entry * 0.97)   # 止损至少 3%，避免过窄被震出
+    stop = min(stop, entry * (1 - cfg.min_stop_pct / 100))
     risk = entry - stop
     if risk <= 0:
         return None
     target = entry + cfg.reward_risk * risk
     risk_budget = cfg.capital * cfg.risk_per_trade_pct / 100
-    shares = int(risk_budget / risk // 100 * 100)
     max_value = cfg.capital * cfg.max_position_pct / 100
-    if shares * entry > max_value:
-        shares = int(max_value / entry // 100 * 100)
+    raw_shares = min(risk_budget / risk, max_value / entry)
+    shares = round(raw_shares, 2) if cfg.fractional_shares else float(int(raw_shares))
+    if shares <= 0:
+        return None
     position_value = shares * entry
-    industry = str(row.get("industry", "") or "")
-    if industry in ("nan", "None"):
-        industry = ""
     return Recommendation(
         code=code,
         name=name,
@@ -209,19 +213,22 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         position_pct=round(position_value / cfg.capital * 100, 2) if cfg.capital else 0.0,
         reasons=reasons,
         factors=factors,
-        board=board_of(code),
-        industry=industry,
+        sector=_str(row.get("sector", "")),
+        market_cap=_f(row.get("market_cap")),
         ma20=round(ma20, 2),
-        ma60=round(ma60, 2),
+        ma50=round(ma50, 2),
+        ma200=round(ma200, 2) if not np.isnan(ma200) else float("nan"),
         rsi14=round(rsi, 1),
         ret20=round(ret20, 2) if not np.isnan(ret20) else float("nan"),
         atr_pct=round(atr_pct, 2),
     )
 
 
-def recommend_all(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig) -> list[Recommendation]:
+def recommend_all(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig, exclude: set[str] | None = None) -> list[Recommendation]:
     out: list[Recommendation] = []
-    for _, df in enriched.items():
+    for code, df in enriched.items():
+        if exclude and code in exclude:
+            continue
         r = score_symbol(df, cfg)
         if r is not None:
             out.append(r)

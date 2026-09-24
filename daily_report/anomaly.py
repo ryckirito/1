@@ -9,7 +9,6 @@ import pandas as pd
 
 from .config import AnomalyConfig
 from .indicators import enrich
-from .market import limit_pct, board_of
 
 
 @dataclass
@@ -25,8 +24,8 @@ class Anomaly:
     details: list[str] = field(default_factory=list)
     score: float = 0.0
     direction: str = "neutral"   # up | down | neutral
-    board: str = ""
-    industry: str = ""
+    sector: str = ""
+    market_cap: float = float("nan")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -34,10 +33,14 @@ class Anomaly:
 
 def _f(x: Any) -> float:
     try:
-        v = float(x)
+        return float(x)
     except (TypeError, ValueError):
         return float("nan")
-    return v
+
+
+def _str(x: Any) -> str:
+    s = "" if x is None else str(x)
+    return "" if s in ("nan", "None") else s
 
 
 def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
@@ -45,7 +48,7 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
     if len(df) < 3:
         return None
     if "pct_chg" not in df.columns:
-        df = enrich(df, vr_window=cfg.volume_ratio_window, breakout_window=cfg.breakout_window, zscore_window=cfg.zscore_window)
+        df = enrich(df, vr_window=cfg.volume_ratio_window, long_window=cfg.long_window, short_window=cfg.short_window, zscore_window=cfg.zscore_window)
     row = df.iloc[-1]
     code, name = str(row["code"]), str(row["name"])
     pct = _f(row["pct_chg"])
@@ -57,46 +60,57 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
     details: list[str] = []
     score = 0.0
 
-    lim = limit_pct(code, name)
-    # 涨停 / 跌停：涨跌幅达到限制的 98% 以上视为封板
-    if pct >= lim * 0.98:
-        tags.append("涨停")
-        details.append(f"涨幅 {pct:.2f}% 触及 {lim:.0f}% 涨停板")
-        score += 30
-    elif pct <= -lim * 0.98:
-        tags.append("跌停")
-        details.append(f"跌幅 {pct:.2f}% 触及 {lim:.0f}% 跌停板")
-        score += 30
+    # 涨跌幅
+    if pct >= cfg.huge_move_pct:
+        tags.append("暴涨")
+        details.append(f"单日上涨 {pct:.2f}%")
+        score += 30 + min(10, (pct - cfg.huge_move_pct) / 2)
+    elif pct <= -cfg.huge_move_pct:
+        tags.append("暴跌")
+        details.append(f"单日下跌 {abs(pct):.2f}%")
+        score += 30 + min(10, (abs(pct) - cfg.huge_move_pct) / 2)
     elif pct >= cfg.big_move_pct:
         tags.append("大涨")
         details.append(f"单日上涨 {pct:.2f}%")
-        score += 15 + min(10, pct - cfg.big_move_pct)
+        score += 15 + min(10, (pct - cfg.big_move_pct) * 2)
     elif pct <= -cfg.big_move_pct:
         tags.append("大跌")
         details.append(f"单日下跌 {abs(pct):.2f}%")
-        score += 15 + min(10, abs(pct) - cfg.big_move_pct)
+        score += 15 + min(10, (abs(pct) - cfg.big_move_pct) * 2)
 
+    # 量能
     if not np.isnan(vr):
         if vr >= cfg.volume_spike_ratio:
             tags.append("放量")
-            details.append(f"量比 {vr:.1f}（成交量为 {cfg.volume_ratio_window} 日均量的 {vr:.1f} 倍）")
+            details.append(f"成交量为 {cfg.volume_ratio_window} 日均量的 {vr:.1f} 倍")
             score += 12 + min(13, (vr - cfg.volume_spike_ratio) * 3)
         elif vr <= cfg.volume_dry_ratio:
             tags.append("缩量")
-            details.append(f"量比仅 {vr:.2f}，成交极度萎缩")
+            details.append(f"成交量仅为 {cfg.volume_ratio_window} 日均量的 {vr:.0%}")
             score += 5
 
-    hi_n, lo_n = _f(row.get("hi_n")), _f(row.get("lo_n"))
+    # 新高新低：52 周优先，否则看 20 日
     close = _f(row["close"])
-    if not np.isnan(hi_n) and close > hi_n:
-        tags.append(f"{cfg.breakout_window}日新高")
-        details.append(f"收盘 {close:.2f} 突破前 {cfg.breakout_window} 日最高 {hi_n:.2f}")
-        score += 15
-    if not np.isnan(lo_n) and close < lo_n:
-        tags.append(f"{cfg.breakout_window}日新低")
-        details.append(f"收盘 {close:.2f} 跌破前 {cfg.breakout_window} 日最低 {lo_n:.2f}")
-        score += 15
+    hi_l, lo_l = _f(row.get("hi_long")), _f(row.get("lo_long"))
+    hi_s, lo_s = _f(row.get("hi_short")), _f(row.get("lo_short"))
+    if not np.isnan(hi_l) and close > hi_l:
+        tags.append("52周新高")
+        details.append(f"收盘 {close:.2f} 创 52 周新高（前高 {hi_l:.2f}）")
+        score += 18
+    elif not np.isnan(hi_s) and close > hi_s:
+        tags.append(f"{cfg.short_window}日新高")
+        details.append(f"收盘 {close:.2f} 突破前 {cfg.short_window} 日最高 {hi_s:.2f}")
+        score += 8
+    if not np.isnan(lo_l) and close < lo_l:
+        tags.append("52周新低")
+        details.append(f"收盘 {close:.2f} 创 52 周新低（前低 {lo_l:.2f}）")
+        score += 18
+    elif not np.isnan(lo_s) and close < lo_s:
+        tags.append(f"{cfg.short_window}日新低")
+        details.append(f"收盘 {close:.2f} 跌破前 {cfg.short_window} 日最低 {lo_s:.2f}")
+        score += 8
 
+    # 跳空
     open_, prev_high, prev_low = _f(row["open"]), _f(row.get("prev_high")), _f(row.get("prev_low"))
     if not np.isnan(prev_high) and open_ > prev_high * (1 + cfg.gap_pct / 100):
         gap = (open_ / prev_high - 1) * 100
@@ -121,19 +135,10 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
         details.append(f"当日收益率 z-score {z:+.1f}（相对近 {cfg.zscore_window} 日）")
         score += 8
 
-    turnover = _f(row.get("turnover"))
-    if not np.isnan(turnover) and turnover >= cfg.turnover_pct:
-        tags.append("高换手")
-        details.append(f"换手率 {turnover:.1f}%")
-        score += 6
-
     if not tags:
         return None
 
     direction = "up" if pct > 0.5 else "down" if pct < -0.5 else "neutral"
-    industry = str(row.get("industry", "") or "")
-    if industry in ("nan", "None"):
-        industry = ""
     return Anomaly(
         code=code,
         name=name,
@@ -146,15 +151,17 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
         details=details,
         score=round(score, 1),
         direction=direction,
-        board=board_of(code),
-        industry=industry,
+        sector=_str(row.get("sector", "")),
+        market_cap=_f(row.get("market_cap")),
     )
 
 
-def detect_all(enriched: dict[str, pd.DataFrame], cfg: AnomalyConfig) -> list[Anomaly]:
-    """enriched: {code: 已 enrich 的单股 DataFrame}。按评分降序返回。"""
+def detect_all(enriched: dict[str, pd.DataFrame], cfg: AnomalyConfig, exclude: set[str] | None = None) -> list[Anomaly]:
+    """enriched: {ticker: 已 enrich 的单股 DataFrame}。按评分降序返回。"""
     out: list[Anomaly] = []
-    for _, df in enriched.items():
+    for code, df in enriched.items():
+        if exclude and code in exclude:
+            continue
         a = detect_symbol(df, cfg)
         if a is not None:
             out.append(a)

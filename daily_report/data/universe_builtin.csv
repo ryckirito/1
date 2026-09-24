@@ -1,0 +1,187 @@
+ticker,name,sector
+AAPL,Apple,Technology
+MSFT,Microsoft,Technology
+NVDA,NVIDIA,Technology
+AMZN,Amazon,Consumer Discretionary
+GOOGL,Alphabet,Communication Services
+META,Meta Platforms,Communication Services
+TSLA,Tesla,Consumer Discretionary
+BRK-B,Berkshire Hathaway,Financials
+AVGO,Broadcom,Technology
+LLY,Eli Lilly,Health Care
+JPM,JPMorgan Chase,Financials
+V,Visa,Financials
+UNH,UnitedHealth,Health Care
+XOM,Exxon Mobil,Energy
+MA,Mastercard,Financials
+COST,Costco,Consumer Staples
+PG,Procter & Gamble,Consumer Staples
+JNJ,Johnson & Johnson,Health Care
+HD,Home Depot,Consumer Discretionary
+ABBV,AbbVie,Health Care
+WMT,Walmart,Consumer Staples
+NFLX,Netflix,Communication Services
+BAC,Bank of America,Financials
+CRM,Salesforce,Technology
+KO,Coca-Cola,Consumer Staples
+ORCL,Oracle,Technology
+CVX,Chevron,Energy
+MRK,Merck,Health Care
+AMD,Advanced Micro Devices,Technology
+PEP,PepsiCo,Consumer Staples
+ADBE,Adobe,Technology
+TMO,Thermo Fisher,Health Care
+CSCO,Cisco,Technology
+ACN,Accenture,Technology
+LIN,Linde,Materials
+MCD,McDonald's,Consumer Discretionary
+ABT,Abbott,Health Care
+WFC,Wells Fargo,Financials
+DHR,Danaher,Health Care
+GE,GE Aerospace,Industrials
+TXN,Texas Instruments,Technology
+PM,Philip Morris,Consumer Staples
+INTU,Intuit,Technology
+IBM,IBM,Technology
+CAT,Caterpillar,Industrials
+VZ,Verizon,Communication Services
+QCOM,Qualcomm,Technology
+AMGN,Amgen,Health Care
+ISRG,Intuitive Surgical,Health Care
+NOW,ServiceNow,Technology
+DIS,Walt Disney,Communication Services
+AMAT,Applied Materials,Technology
+SPGI,S&P Global,Financials
+CMCSA,Comcast,Communication Services
+UBER,Uber,Industrials
+GS,Goldman Sachs,Financials
+PFE,Pfizer,Health Care
+AXP,American Express,Financials
+RTX,RTX,Industrials
+NEE,NextEra Energy,Utilities
+T,AT&T,Communication Services
+BKNG,Booking Holdings,Consumer Discretionary
+LOW,Lowe's,Consumer Discretionary
+HON,Honeywell,Industrials
+UNP,Union Pacific,Industrials
+PGR,Progressive,Financials
+MS,Morgan Stanley,Financials
+ETN,Eaton,Industrials
+BLK,BlackRock,Financials
+SYK,Stryker,Health Care
+TJX,TJX,Consumer Discretionary
+COP,ConocoPhillips,Energy
+LMT,Lockheed Martin,Industrials
+VRTX,Vertex Pharmaceuticals,Health Care
+BSX,Boston Scientific,Health Care
+SCHW,Charles Schwab,Financials
+ADP,ADP,Industrials
+C,Citigroup,Financials
+MDT,Medtronic,Health Care
+REGN,Regeneron,Health Care
+PANW,Palo Alto Networks,Technology
+MU,Micron,Technology
+LRCX,Lam Research,Technology
+ADI,Analog Devices,Technology
+BX,Blackstone,Financials
+CB,Chubb,Financials
+PLD,Prologis,Real Estate
+KLAC,KLA,Technology
+ANET,Arista Networks,Technology
+SBUX,Starbucks,Consumer Discretionary
+GILD,Gilead,Health Care
+DE,Deere,Industrials
+BMY,Bristol-Myers Squibb,Health Care
+MDLZ,Mondelez,Consumer Staples
+SO,Southern Company,Utilities
+INTC,Intel,Technology
+TMUS,T-Mobile US,Communication Services
+AMT,American Tower,Real Estate
+DUK,Duke Energy,Utilities
+CME,CME Group,Financials
+MO,Altria,Consumer Staples
+ICE,Intercontinental Exchange,Financials
+PLTR,Palantir,Technology
+ZTS,Zoetis,Health Care
+SHW,Sherwin-Williams,Materials
+WM,Waste Management,Industrials
+CL,Colgate-Palmolive,Consumer Staples
+TGT,Target,Consumer Staples
+EQIX,Equinix,Real Estate
+PYPL,PayPal,Financials
+NKE,Nike,Consumer Discretionary
+MCO,Moody's,Financials
+CVS,CVS Health,Health Care
+GD,General Dynamics,Industrials
+ITW,Illinois Tool Works,Industrials
+ABNB,Airbnb,Consumer Discretionary
+CRWD,CrowdStrike,Technology
+SNPS,Synopsys,Technology
+CDNS,Cadence Design,Technology
+MAR,Marriott,Consumer Discretionary
+ORLY,O'Reilly Automotive,Consumer Discretionary
+USB,U.S. Bancorp,Financials
+PNC,PNC Financial,Financials
+EOG,EOG Resources,Energy
+CSX,CSX,Industrials
+NOC,Northrop Grumman,Industrials
+FDX,FedEx,Industrials
+AON,Aon,Financials
+ECL,Ecolab,Materials
+APD,Air Products,Materials
+MSI,Motorola Solutions,Technology
+FCX,Freeport-McMoRan,Materials
+TT,Trane Technologies,Industrials
+COIN,Coinbase,Financials
+HLT,Hilton,Consumer Discretionary
+EMR,Emerson,Industrials
+NXPI,NXP Semiconductors,Technology
+OKE,ONEOK,Energy
+AZO,AutoZone,Consumer Discretionary
+SPG,Simon Property,Real Estate
+ROST,Ross Stores,Consumer Discretionary
+MRVL,Marvell,Technology
+ADSK,Autodesk,Technology
+DASH,DoorDash,Consumer Discretionary
+TRV,Travelers,Financials
+AFL,Aflac,Financials
+KMI,Kinder Morgan,Energy
+NEM,Newmont,Materials
+GM,General Motors,Consumer Discretionary
+F,Ford,Consumer Discretionary
+WDAY,Workday,Technology
+FTNT,Fortinet,Technology
+CMG,Chipotle,Consumer Discretionary
+PAYX,Paychex,Industrials
+MET,MetLife,Financials
+CTAS,Cintas,Industrials
+LULU,Lululemon,Consumer Discretionary
+MNST,Monster Beverage,Consumer Staples
+ARM,Arm Holdings,Technology
+HOOD,Robinhood,Financials
+SHOP,Shopify,Technology
+MSTR,MicroStrategy,Technology
+APP,AppLovin,Technology
+SMCI,Super Micro Computer,Technology
+DELL,Dell Technologies,Technology
+SNOW,Snowflake,Technology
+DDOG,Datadog,Technology
+NET,Cloudflare,Technology
+ZS,Zscaler,Technology
+TTD,The Trade Desk,Technology
+SQ,Block,Financials
+SOFI,SoFi,Financials
+RIVN,Rivian,Consumer Discretionary
+LCID,Lucid,Consumer Discretionary
+NIO,NIO,Consumer Discretionary
+BABA,Alibaba,Consumer Discretionary
+PDD,PDD Holdings,Consumer Discretionary
+JD,JD.com,Consumer Discretionary
+TSM,Taiwan Semiconductor,Technology
+ASML,ASML,Technology
+NVO,Novo Nordisk,Health Care
+TM,Toyota,Consumer Discretionary
+SPY,SPDR S&P 500 ETF,ETF
+QQQ,Invesco QQQ ETF,ETF
+IWM,iShares Russell 2000 ETF,ETF
+DIA,SPDR Dow Jones ETF,ETF

@@ -1,8 +1,8 @@
 """本地 CSV 数据源。
 
-目录下每只股票一个文件 `<code>.csv`（也支持 `<code>_<name>.csv`），列至少包含：
-date, open, high, low, close, volume, amount。可选列 name / turnover。
-也可以放一个 `all.csv` 长表，含 code 列。
+目录下每只股票一个文件 `<TICKER>.csv`，列至少包含：date, open, high, low, close, volume。
+amount 缺失时按 close*volume 估算。也可以放一个 `all.csv` 长表（含 code/ticker 列）。
+兼容 Yahoo Finance 导出格式（Date, Open, High, Low, Close, Adj Close, Volume）。
 """
 from __future__ import annotations
 
@@ -14,33 +14,26 @@ import pandas as pd
 from .base import DataProvider, normalize_history
 
 _COLUMN_ALIASES = {
-    "日期": "date",
-    "开盘": "open",
-    "最高": "high",
-    "最低": "low",
-    "收盘": "close",
-    "成交量": "volume",
-    "成交额": "amount",
-    "换手率": "turnover",
-    "代码": "code",
-    "名称": "name",
-    "股票代码": "code",
-    "股票名称": "name",
+    "ticker": "code",
+    "symbol": "code",
+    "adj close": "adj_close",
+    "adj_close": "adj_close",
 }
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path, dtype={"code": str, "代码": str, "股票代码": str})
-    df = df.rename(columns={c: _COLUMN_ALIASES.get(str(c).strip(), str(c).strip().lower()) for c in df.columns})
+    df = pd.read_csv(path, dtype={"code": str, "ticker": str, "symbol": str})
+    df = df.rename(columns={c: _COLUMN_ALIASES.get(str(c).strip().lower(), str(c).strip().lower()) for c in df.columns})
+    if "amount" not in df.columns and {"close", "volume"} <= set(df.columns):
+        df["amount"] = pd.to_numeric(df["close"], errors="coerce") * pd.to_numeric(df["volume"], errors="coerce")
     return df
 
 
 class CsvProvider(DataProvider):
     name = "csv"
 
-    def __init__(self, csv_dir: str | Path, watchlist: list[str] | None = None):
+    def __init__(self, csv_dir: str | Path):
         self.csv_dir = Path(csv_dir)
-        self.watchlist = list(watchlist or [])
 
     def load_history(self, end: dt.date, start: dt.date) -> pd.DataFrame:
         if not self.csv_dir.exists():
@@ -52,8 +45,7 @@ class CsvProvider(DataProvider):
         for path in sorted(self.csv_dir.glob("*.csv")):
             if path.name == "all.csv":
                 continue
-            stem = path.stem
-            code, _, name = stem.partition("_")
+            code, _, name = path.stem.partition("_")
             df = _read_csv(path)
             if "code" not in df.columns:
                 df["code"] = code

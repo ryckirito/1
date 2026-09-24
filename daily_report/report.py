@@ -9,32 +9,32 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .config import ReportConfig
+from .market import fmt_usd
 from .pipeline import DailyReport
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
-def fmt_amount(value: float) -> str:
-    """成交额格式化：亿 / 万。"""
-    if value is None or (isinstance(value, float) and math.isnan(value)):
-        return "-"
-    if abs(value) >= 1e8:
-        return f"{value / 1e8:.2f} 亿"
-    if abs(value) >= 1e4:
-        return f"{value / 1e4:.0f} 万"
-    return f"{value:.0f}"
+def _is_nan(value: Any) -> bool:
+    return value is None or (isinstance(value, float) and math.isnan(value))
 
 
 def fmt_num(value: float, digits: int = 2) -> str:
-    if value is None or (isinstance(value, float) and math.isnan(value)):
+    if _is_nan(value):
         return "-"
     return f"{value:.{digits}f}"
 
 
 def fmt_pct(value: float, digits: int = 2) -> str:
-    if value is None or (isinstance(value, float) and math.isnan(value)):
+    if _is_nan(value):
         return "-"
     return f"{value:+.{digits}f}%"
+
+
+def fmt_shares(value: float) -> str:
+    if _is_nan(value):
+        return "-"
+    return f"{value:g}" if float(value).is_integer() else f"{value:.2f}"
 
 
 def _env() -> Environment:
@@ -44,9 +44,10 @@ def _env() -> Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    env.filters["amount"] = fmt_amount
+    env.filters["usd"] = fmt_usd
     env.filters["num"] = fmt_num
     env.filters["pct"] = fmt_pct
+    env.filters["shares"] = fmt_shares
     return env
 
 
@@ -58,10 +59,6 @@ def render_html(report: DailyReport, cfg: ReportConfig) -> str:
     return _env().get_template("report.html.j2").render(r=report, title=cfg.title)
 
 
-def render_json(report: DailyReport) -> str:
-    return json.dumps(_strip_nan(report.to_dict()), ensure_ascii=False, indent=2, default=str)
-
-
 def _strip_nan(obj: Any) -> Any:
     if isinstance(obj, float) and math.isnan(obj):
         return None
@@ -70,6 +67,10 @@ def _strip_nan(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_strip_nan(v) for v in obj]
     return obj
+
+
+def render_json(report: DailyReport) -> str:
+    return json.dumps(_strip_nan(report.to_dict()), ensure_ascii=False, indent=2, default=str)
 
 
 def write_report(report: DailyReport, cfg: ReportConfig) -> dict[str, Path]:

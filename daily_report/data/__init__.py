@@ -1,4 +1,4 @@
-"""数据源。统一输出长表 DataFrame：code, name, date, open, high, low, close, volume, amount[, turnover]。"""
+"""数据源。统一输出长表 DataFrame：code(ticker), name, date, open, high, low, close, volume, amount[, sector, market_cap]。"""
 from __future__ import annotations
 
 from ..config import DataConfig
@@ -10,30 +10,20 @@ def make_provider(cfg: DataConfig) -> DataProvider:
     if src == "demo":
         from .demo import DemoProvider
 
-        return DemoProvider(n_symbols=cfg.demo_symbols, seed=cfg.demo_seed, watchlist=cfg.watchlist)
+        return DemoProvider(n_symbols=cfg.demo_symbols, seed=cfg.demo_seed, watchlist=cfg.watchlist, benchmarks=cfg.benchmarks)
     if src == "csv":
         from .csv_provider import CsvProvider
 
-        return CsvProvider(cfg.csv_dir, watchlist=cfg.watchlist)
-    if src == "eastmoney":
-        from .eastmoney import EastmoneyProvider
+        return CsvProvider(cfg.csv_dir)
+    if src == "yfinance":
+        from .yfinance_provider import YFinanceProvider
 
-        return EastmoneyProvider(
-            max_symbols=cfg.max_symbols,
-            watchlist=cfg.watchlist,
-            cache_dir=cfg.cache_dir,
-            request_interval=cfg.request_interval,
-        )
-    if src == "akshare":
-        from .akshare_provider import AkshareProvider
+        return YFinanceProvider(cfg)
+    if src == "stooq":
+        from .stooq import StooqProvider
 
-        return AkshareProvider(
-            max_symbols=cfg.max_symbols,
-            watchlist=cfg.watchlist,
-            cache_dir=cfg.cache_dir,
-            request_interval=cfg.request_interval,
-        )
-    raise ValueError(f"未知数据源: {cfg.source}（可选 demo/csv/eastmoney/akshare）")
+        return StooqProvider(cfg)
+    raise ValueError(f"未知数据源: {cfg.source}（可选 demo/csv/yfinance/stooq）")
 
 
 __all__ = ["DataProvider", "REQUIRED_COLUMNS", "normalize_history", "make_provider"]

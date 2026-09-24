@@ -1,48 +1,42 @@
-"""A 股市场规则相关的小工具。"""
+"""美股市场相关的小工具。"""
 from __future__ import annotations
 
+import re
 
-def board_of(code: str) -> str:
-    """根据代码判断板块。"""
-    code = str(code).zfill(6)
-    if code.startswith("68"):
-        return "科创板"
-    if code.startswith("30"):
-        return "创业板"
-    if code.startswith(("4", "8", "92")):
-        return "北交所"
-    if code.startswith(("60", "00")):
-        return "主板"
-    return "其他"
+_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 
 
-def limit_pct(code: str, name: str = "") -> float:
-    """涨跌停幅度（百分比）。"""
-    if "ST" in str(name).upper():
-        return 5.0
-    board = board_of(code)
-    if board in ("科创板", "创业板"):
-        return 20.0
-    if board == "北交所":
-        return 30.0
-    return 10.0
+def normalize_ticker(ticker: str) -> str:
+    """统一为大写、用 '-' 连接的 Yahoo 风格代码（BRK.B -> BRK-B）。"""
+    t = str(ticker).strip().upper().replace(".", "-")
+    return t
 
 
-def is_st(name: str) -> bool:
-    return "ST" in str(name).upper()
+def is_valid_ticker(ticker: str) -> bool:
+    return bool(_TICKER_RE.match(normalize_ticker(ticker)))
 
 
-def exchange_of(code: str) -> str:
-    code = str(code).zfill(6)
-    if code.startswith(("6", "9")):
-        return "sh"
-    if code.startswith(("0", "2", "3")):
-        return "sz"
-    return "bj"
+def stooq_symbol(ticker: str) -> str:
+    """Stooq 的美股代码：小写 + .us（BRK-B -> brk-b.us）。"""
+    return f"{normalize_ticker(ticker).lower()}.us"
 
 
-def eastmoney_secid(code: str) -> str:
-    """东方财富 secid：沪市 1.xxxxxx，深市 / 北交所 0.xxxxxx。"""
-    code = str(code).zfill(6)
-    market = "1" if exchange_of(code) == "sh" else "0"
-    return f"{market}.{code}"
+def is_penny(price: float, min_price: float = 5.0) -> bool:
+    return price < min_price
+
+
+def fmt_usd(value: float) -> str:
+    """美元金额：$1.23B / $456M / $78K。"""
+    if value is None or value != value:  # NaN
+        return "-"
+    sign = "-" if value < 0 else ""
+    v = abs(value)
+    if v >= 1e12:
+        return f"{sign}${v / 1e12:.2f}T"
+    if v >= 1e9:
+        return f"{sign}${v / 1e9:.2f}B"
+    if v >= 1e6:
+        return f"{sign}${v / 1e6:.1f}M"
+    if v >= 1e3:
+        return f"{sign}${v / 1e3:.0f}K"
+    return f"{sign}${v:.2f}"

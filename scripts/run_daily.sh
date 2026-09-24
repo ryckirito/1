@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 每日收盘后运行：bash scripts/run_daily.sh [额外参数]
-# 例：bash scripts/run_daily.sh --source eastmoney --notify
+# 例：bash scripts/run_daily.sh --source yfinance --notify
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p logs

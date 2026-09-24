@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 
-def make_history(code="600001", name="测试股", days=120, start_price=20.0, drift=0.0, vol=0.01, seed=1, end=None):
+def make_history(code="AAPL", name="Apple", days=300, start_price=100.0, drift=0.0, vol=0.01, seed=1, end=None, sector="Technology"):
     """生成单只股票的历史行情（工作日）。"""
     rng = np.random.default_rng(seed)
     end = end or dt.date(2026, 9, 24)
@@ -26,6 +26,7 @@ def make_history(code="600001", name="测试股", days=120, start_price=20.0, dr
         {
             "code": code,
             "name": name,
+            "sector": sector,
             "date": pd.to_datetime(dates),
             "open": open_,
             "high": high,
