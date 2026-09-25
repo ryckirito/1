@@ -74,8 +74,11 @@ def _ramp(value: float, lo: float, hi: float) -> float:
     return (value - lo) / (hi - lo)
 
 
-def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | None:
-    """df：单只股票 enrich 后的行情。返回评分与交易计划；不满足过滤条件时返回 None。"""
+def score_symbol(df: pd.DataFrame, cfg: RecommendConfig, ranks: dict[str, dict[str, float]] | None = None) -> Recommendation | None:
+    """df：单只股票 enrich 后的行情。返回评分与交易计划；不满足过滤条件时返回 None。
+
+    ranks：rank_mode 下由 recommend_all 传入的当日截面百分位 {"rs": {code: 0~1}, "mom12": {...}}。
+    """
     if len(df) < cfg.min_history_days:
         return None
     row = df.iloc[-1]
@@ -147,8 +150,35 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         rs_score = 0.3 + 0.7 * _ramp(rs, 0.0, 10.0)
     else:
         rs_score = 0.3 * (1 - _ramp(-rs, 0.0, 10.0))
+    if ranks and cfg.rank_mode and code in ranks.get("rs", {}):
+        rs_score = ranks["rs"][code]
     if not np.isnan(rs) and rs > 0 and cfg.w_rs > 0:
         reasons.append(f"{cfg.rs_window} 日跑赢基准 {rs:.1f}%")
+
+    # 长期动量 0~1：12-1 个月涨幅，0% → 0.3，+40% → 1
+    mom12 = _f(row.get("mom12_1"))
+    if ranks and cfg.rank_mode and code in ranks.get("mom12", {}):
+        mom12_s = ranks["mom12"][code]
+    elif np.isnan(mom12):
+        mom12_s = 0.0
+    elif mom12 >= 0:
+        mom12_s = 0.3 + 0.7 * _ramp(mom12, 0.0, 40.0)
+    else:
+        mom12_s = 0.3 * (1 - _ramp(-mom12, 0.0, 30.0))
+    if cfg.w_mom12 > 0 and not np.isnan(mom12) and mom12 > 10:
+        reasons.append(f"12 个月动量 {mom12:.0f}%")
+
+    # 趋势平滑度 0~1：相关系数 0.5 → 0，0.95 → 1
+    corr = _f(row.get("trend_corr60"))
+    smooth_s = _ramp(corr, 0.5, 0.95)
+    if cfg.w_smooth > 0 and corr >= 0.8:
+        reasons.append(f"60 日趋势平滑（相关系数 {corr:.2f}）")
+
+    # 接近 52 周高点 0~1：距高点 -15% → 0，0% → 1
+    dist_hi = _f(row.get("dist_hi_long"))
+    near_high_s = _ramp(dist_hi, -15.0, 0.0) if not np.isnan(dist_hi) else 0.0
+    if cfg.w_near_high > 0 and not np.isnan(dist_hi) and dist_hi >= -3:
+        reasons.append(f"距 52 周高点仅 {abs(dist_hi):.1f}%")
 
     # 量能 0~1
     volume_s = 0.0
@@ -187,8 +217,10 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
     elif not np.isnan(dist_ma20) and 0 < dist_ma20 <= 8 and close > ma5:
         pattern_s = 0.5
 
-    weights = {"trend": cfg.w_trend, "momentum": cfg.w_momentum, "rs": cfg.w_rs, "volume": cfg.w_volume, "rsi": cfg.w_rsi, "pattern": cfg.w_pattern}
-    raw = {"trend": trend, "momentum": momentum, "rs": rs_score, "volume": volume_s, "rsi": rsi_s, "pattern": pattern_s}
+    weights = {"trend": cfg.w_trend, "momentum": cfg.w_momentum, "rs": cfg.w_rs, "mom12": cfg.w_mom12, "smooth": cfg.w_smooth,
+               "near_high": cfg.w_near_high, "volume": cfg.w_volume, "rsi": cfg.w_rsi, "pattern": cfg.w_pattern}
+    raw = {"trend": trend, "momentum": momentum, "rs": rs_score, "mom12": mom12_s, "smooth": smooth_s, "near_high": near_high_s,
+           "volume": volume_s, "rsi": rsi_s, "pattern": pattern_s}
     for k, w in weights.items():
         if w > 0:
             factors[k] = round(raw[k] * w, 1)
@@ -250,12 +282,49 @@ def size_position(r: Recommendation, cfg: RecommendConfig, cap_pct: float) -> Re
     return r
 
 
+def market_regime(enriched: dict[str, pd.DataFrame]) -> bool | None:
+    """基准是否处于多头环境（收盘 > MA200）。没有基准数据时返回 None。"""
+    for df in enriched.values():
+        if "bench_bull" in df.columns and len(df):
+            v = df["bench_bull"].iloc[-1]
+            return None if pd.isna(v) else bool(v)
+    return None
+
+
+def _cross_section_ranks(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig, exclude: set[str]) -> dict[str, dict[str, float]]:
+    """当日截面百分位（0~1）：相对强弱与长期动量。"""
+    rs_col, own_col = ("bench_ret60", "ret60") if cfg.rs_window >= 60 else ("bench_ret20", "ret20")
+    rows = []
+    for code, df in enriched.items():
+        if code in exclude or not len(df):
+            continue
+        last = df.iloc[-1]
+        rows.append({"code": code, "rs": _f(last.get(own_col)) - _f(last.get(rs_col)), "mom12": _f(last.get("mom12_1"))})
+    if not rows:
+        return {}
+    frame = pd.DataFrame(rows).set_index("code")
+    out: dict[str, dict[str, float]] = {}
+    for col in ("rs", "mom12"):
+        pct = frame[col].rank(pct=True)
+        out[col] = {c: float(v) for c, v in pct.dropna().items()}
+    return out
+
+
 def recommend_all(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig, exclude: set[str] | None = None) -> list[Recommendation]:
+    exclude = exclude or set()
+    top_n = cfg.top_n
+    if cfg.regime_filter != "off":
+        bull = market_regime(enriched)
+        if bull is False:
+            if cfg.regime_filter == "skip":
+                return []
+            top_n = max(1, top_n // 2)
+    ranks = _cross_section_ranks(enriched, cfg, exclude) if cfg.rank_mode else None
     scored: list[Recommendation] = []
     for code, df in enriched.items():
-        if exclude and code in exclude:
+        if code in exclude:
             continue
-        r = score_symbol(df, cfg)
+        r = score_symbol(df, cfg, ranks)
         if r is not None:
             scored.append(r)
     scored.sort(key=lambda r: (-r.score, r.risk_pct))
@@ -268,9 +337,9 @@ def recommend_all(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig, exclu
                 continue
             per_sector[r.sector] = per_sector.get(r.sector, 0) + 1
         out.append(r)
-        if len(out) >= cfg.top_n:
+        if len(out) >= top_n:
             break
     # 单只仓位上限：min(max_position_pct, 总仓位上限 / 推荐条数)
-    cap = min(cfg.max_position_pct, cfg.max_total_exposure_pct / max(1, cfg.top_n))
+    cap = min(cfg.max_position_pct, cfg.max_total_exposure_pct / max(1, top_n))
     out = [size_position(r, cfg, cap) for r in out]
     return [r for r in out if r.shares > 0]

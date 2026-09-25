@@ -83,6 +83,9 @@ def attach_benchmark(enriched: dict[str, pd.DataFrame], bench_code: str) -> None
     if bench is None:
         return
     b = bench[["date", "pct_chg", "ret20", "ret60"]].rename(columns={"pct_chg": "bench_pct_chg", "ret20": "bench_ret20", "ret60": "bench_ret60"})
+    # 市场环境：基准收盘在 MA200 之上视为多头（MA200 缺失时用 MA50）
+    ref = bench["ma200"].where(bench["ma200"].notna(), bench["ma50"])
+    b["bench_bull"] = (bench["close"] > ref).astype(float).where(ref.notna())
     for code, df in enriched.items():
         if "bench_ret20" in df.columns:
             continue

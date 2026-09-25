@@ -52,6 +52,11 @@ class RecommendConfig:
     w_rsi: float = 10.0
     w_pattern: float = 20.0
     rs_window: int = 20                 # 相对强弱回看天数（20 或 60）
+    w_mom12: float = 0.0                # 长期动量（12 个月剔除最近 1 个月）
+    w_smooth: float = 0.0               # 趋势平滑度（60 日 log 价格与时间的相关系数）
+    w_near_high: float = 0.0            # 接近 52 周高点
+    rank_mode: bool = False             # True：相对强弱 / 长期动量按当日截面百分位打分，而非绝对阈值
+    regime_filter: str = "off"          # off | halve | skip：基准跌破 MA200 时推荐条数减半 / 不推荐
     max_per_sector: int = 0             # 每个板块最多推荐几只，0 不限制
     max_total_exposure_pct: float = 100.0  # 全部推荐合计仓位上限，用于给单只仓位封顶
     stop_atr_mult: float = 3.0          # 止损 = 收盘 - N*ATR（与 10 日最低价取高者）

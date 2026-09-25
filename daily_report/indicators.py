@@ -108,4 +108,12 @@ def enrich(
     out["ret60"] = (close / close.shift(60) - 1) * 100.0
     out["low10"] = out["low"].rolling(10, min_periods=5).min()
     out["streak"] = streak(close)
+    # 长期动量：12 个月剔除最近 1 个月（250 日 → 20 日前）
+    out["mom12_1"] = (close.shift(20) / close.shift(250) - 1) * 100.0
+    # 趋势平滑度：近 60 日 log 价格对时间的相关系数（>0 且接近 1 表示稳步上行）
+    logc = np.log(close)
+    t = pd.Series(np.arange(len(out), dtype=float), index=out.index)
+    out["trend_corr60"] = logc.rolling(60, min_periods=40).corr(t)
+    # 距 52 周高点的距离（0 表示正在新高，-10 表示低于高点 10%）
+    out["dist_hi_long"] = (close / out["hi_long"] - 1) * 100.0
     return out
