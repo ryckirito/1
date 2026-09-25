@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("-o", "--out", help="报告输出目录")
     run.add_argument("-f", "--formats", help="输出格式，逗号分隔，如 md,html,json")
     run.add_argument("--max-symbols", type=int, help="联网数据源最多拉取多少只股票")
+    run.add_argument("--history-days", type=int, help="拉取多少个自然日历史")
     run.add_argument("--top-n", type=int, help="推荐条数")
     run.add_argument("--capital", type=float, help="账户总资金（美元），用于仓位计算")
     run.add_argument("--dump-history", help="把本次加载到的行情写成 CSV（可作为 csv 数据源复算）")
@@ -72,7 +73,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .report import render_markdown, write_report
 
     overrides = {
-        "data": {"source": args.source, "csv_dir": args.csv_dir, "max_symbols": args.max_symbols, "universe": args.universe},
+        "data": {"source": args.source, "csv_dir": args.csv_dir, "max_symbols": args.max_symbols, "universe": args.universe, "history_days": args.history_days},
         "report": {"out_dir": args.out, "formats": args.formats.split(",") if args.formats else None},
         "recommend": {"top_n": args.top_n, "capital": args.capital},
     }

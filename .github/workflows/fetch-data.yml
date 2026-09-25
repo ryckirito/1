@@ -18,6 +18,14 @@ on:
         description: 最多拉取多少只
         default: "300"
         type: string
+      history_days:
+        description: 拉取多少个自然日历史
+        default: "420"
+        type: string
+      branch:
+        description: 推送到哪个分支
+        default: data-snapshot
+        type: string
 
 permissions:
   contents: write
@@ -38,19 +46,20 @@ jobs:
             --source "${{ inputs.source }}" \
             --universe "${{ inputs.universe }}" \
             --max-symbols "${{ inputs.max_symbols }}" \
+            --history-days "${{ inputs.history_days }}" \
             --out snapshot/reports \
             --dump-history snapshot/history.csv
           ls -la snapshot snapshot/reports
-      - name: 推送到 data-snapshot 分支
+      - name: 推送到快照分支
         run: |
           cd snapshot
           git init -q
-          git checkout -q -b data-snapshot
+          git checkout -q -b "${{ inputs.branch }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "snapshot: ${{ inputs.source }} $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-snapshot
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" "${{ inputs.branch }}"
       - uses: actions/upload-artifact@v4
         with:
           name: snapshot-${{ github.run_id }}
