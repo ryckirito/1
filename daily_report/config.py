@@ -21,6 +21,8 @@ class AnomalyConfig:
     amplitude_pct: float = 6.0          # 振幅 (high-low)/prev_close 百分比
     zscore_window: int = 60             # 收益率 z-score 回看天数
     zscore_threshold: float = 3.0       # |z| >= 该值视为统计异常
+    excess_pct: float = 4.0             # 相对基准超额涨跌幅 >= 该值视为显著跑赢/跑输大盘
+    streak_days: int = 5                # 连涨/连跌达到该天数打标签
     min_score: float = 10.0             # 强度低于该值的异动不展示（单个 20 日新高/新低或缩量约 5~8 分）
     max_items: int = 40                 # 报告中最多展示多少条异动
 
@@ -31,19 +33,29 @@ class RecommendConfig:
     risk_per_trade_pct: float = 1.0     # 单笔交易风险预算占总资金百分比
     max_position_pct: float = 15.0      # 单只标的最大仓位百分比
     top_n: int = 10                     # 推荐条数
-    min_score: float = 60.0             # 低于该评分不推荐
+    min_score: float = 70.0             # 低于该评分不推荐（回测：70 分以上超额收益明显更好）
     min_price: float = 5.0              # 股价下限（美元），过滤仙股
     min_avg_dollar_volume: float = 2e7  # 20 日均成交额下限（美元）
     min_history_days: int = 120         # 历史数据不足时跳过
-    max_atr_pct: float = 5.0            # ATR/收盘价 上限，过滤波动过大的股票
+    max_atr_pct: float = 7.0            # ATR/收盘价 上限，过滤波动过大的股票（回测：5% 会把强势高波动股全部剔除）
     rsi_low: float = 45.0
     rsi_high: float = 72.0
     momentum_window: int = 20
     momentum_min_pct: float = 0.0
-    momentum_max_pct: float = 25.0
+    momentum_max_pct: float = 40.0      # 20 日涨幅超过该值视为过热（回测：25 太紧，会错过强势股）
     pullback_band_pct: float = 3.0      # 收盘价距 MA20 在该带宽内视为回踩支撑
-    stop_atr_mult: float = 2.0          # 止损 = 收盘 - N*ATR（与 10 日最低价取高者）
-    min_stop_pct: float = 3.0           # 止损距离下限（%）
+    # 各因子权重（0~1 的因子得分乘以权重，合计即总分；默认合计 100）
+    w_trend: float = 25.0
+    w_momentum: float = 15.0
+    w_rs: float = 15.0                  # 相对基准强弱（rs_window 日超额收益）
+    w_volume: float = 15.0
+    w_rsi: float = 10.0
+    w_pattern: float = 20.0
+    rs_window: int = 20                 # 相对强弱回看天数（20 或 60）
+    max_per_sector: int = 0             # 每个板块最多推荐几只，0 不限制
+    max_total_exposure_pct: float = 100.0  # 全部推荐合计仓位上限，用于给单只仓位封顶
+    stop_atr_mult: float = 3.0          # 止损 = 收盘 - N*ATR（与 10 日最低价取高者）
+    min_stop_pct: float = 6.0           # 止损距离下限（%）。回测：3% 止损在 20 日持有期内一半会被震出
     reward_risk: float = 2.0            # 目标价 = 入场 + reward_risk * 风险
     max_daily_gain_pct: float = 6.0     # 当日涨幅超过该值视为追高，不推荐
     max_daily_loss_pct: float = 4.0     # 当日跌幅超过该值视为走弱，不推荐

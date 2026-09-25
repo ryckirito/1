@@ -25,6 +25,11 @@
   .plan { font-weight:600; }
   .sectors { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
   .sectors span { font-size:12px; padding:2px 8px; border-radius:12px; border:1px solid var(--line); background:var(--card); }
+  .spark .line { stroke: var(--accent); } .spark .area { fill: var(--accent); opacity: .12; } .spark .dot { fill: var(--accent); }
+  .spark.up .line, .spark.up .dot { stroke: var(--up); fill: var(--up); } .spark.up .area { fill: var(--up); }
+  .spark.down .line, .spark.down .dot { stroke: var(--down); fill: var(--down); } .spark.down .area { fill: var(--down); }
+  .spark.up .line, .spark.down .line { fill: none; }
+  td.sp { padding-block: 2px; }
   .disclaimer { color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:12px; margin-top:32px; }
 </style>
 </head>
@@ -36,7 +41,7 @@
 {% if r.overview.benchmarks %}
 <div class="bench">
 {% for b in r.overview.benchmarks %}
-<span><b>{{ b.code }}</b> {{ b.close | num }} <span class="{{ 'up' if b.pct_chg >= 0 else 'down' }}">{{ b.pct_chg | pct }}</span> <span class="meta">5 日 {{ b.ret5 | pct(1) }} · 20 日 {{ b.ret20 | pct(1) }}</span></span>
+<span><b>{{ b.code }}</b> {{ b.close | num }} <span class="{{ 'up' if b.pct_chg >= 0 else 'down' }}">{{ b.pct_chg | pct }}</span> <span class="meta">5 日 {{ b.ret5 | pct(1) }} · 20 日 {{ b.ret20 | pct(1) }}</span> {{ b.closes | spark | safe }}</span>
 {% endfor %}
 </div>
 {% endif %}
@@ -60,14 +65,14 @@
 <h2>二、异动榜（{{ r.anomalies | length }} 条）</h2>
 {% if r.anomalies %}
 <div class="wrap"><table>
-<thead><tr><th>#</th><th>代码</th><th>名称</th><th>板块</th><th>收盘</th><th>涨跌幅</th><th>量比</th><th>成交额</th><th style="text-align:left">异动标签</th><th>强度</th></tr></thead>
+<thead><tr><th>#</th><th>代码</th><th>名称</th><th>板块</th><th>收盘</th><th>涨跌幅</th><th>较大盘</th><th>量比</th><th>成交额</th><th style="text-align:left">异动标签</th><th>强度</th><th>近 60 日</th></tr></thead>
 <tbody>
 {% for a in r.anomalies %}
 <tr title="{{ a.details | join('；') }}">
   <td>{{ loop.index }}</td><td><b>{{ a.code }}</b></td><td>{{ a.name }}</td><td>{{ a.sector }}</td>
-  <td>{{ a.close | num }}</td><td class="{{ 'up' if a.pct_chg >= 0 else 'down' }}">{{ a.pct_chg | pct }}</td>
+  <td>{{ a.close | num }}</td><td class="{{ 'up' if a.pct_chg >= 0 else 'down' }}">{{ a.pct_chg | pct }}</td><td>{{ a.excess_pct | pct }}</td>
   <td>{{ a.vol_ratio | num(1) }}</td><td>{{ a.amount | usd }}</td>
-  <td style="text-align:left">{% for t in a.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td><td>{{ a.score | num(0) }}</td>
+  <td style="text-align:left">{% for t in a.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td><td>{{ a.score | num(0) }}</td><td class="sp">{{ a.closes | spark | safe }}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>
@@ -83,20 +88,20 @@
 <h2>三、推荐建仓（{{ r.recommendations | length }} 条）</h2>
 {% if r.recommendations %}
 <div class="wrap"><table>
-<thead><tr><th>#</th><th>代码</th><th>名称</th><th>形态</th><th>评分</th><th>收盘</th><th>建议入场</th><th>止损</th><th>目标</th><th>风险</th><th>盈亏比</th><th>建议股数</th><th>仓位</th></tr></thead>
+<thead><tr><th>#</th><th>代码</th><th>名称</th><th>形态</th><th>评分</th><th>收盘</th><th>建议入场</th><th>止损</th><th>目标</th><th>风险</th><th>盈亏比</th><th>建议股数</th><th>仓位</th><th>近 60 日</th></tr></thead>
 <tbody>
 {% for x in r.recommendations %}
 <tr><td>{{ loop.index }}</td><td><b>{{ x.code }}</b></td><td>{{ x.name }}</td><td>{{ x.setup }}</td><td><b>{{ x.score | num(0) }}</b></td>
 <td>{{ x.close | num }}</td><td>{{ x.entry | num }}</td><td class="down">{{ x.stop_loss | num }}</td><td class="up">{{ x.target | num }}</td>
-<td>{{ x.risk_pct | num(1) }}%</td><td>1:{{ x.reward_risk | num(1) }}</td><td>{{ x.shares | shares }}</td><td>{{ x.position_pct | num(1) }}%</td></tr>
+<td>{{ x.risk_pct | num(1) }}%</td><td>1:{{ x.reward_risk | num(1) }}</td><td>{{ x.shares | shares }}</td><td>{{ x.position_pct | num(1) }}%</td><td class="sp">{{ x.closes | spark | safe }}</td></tr>
 {% endfor %}
 </tbody></table></div>
 {% for x in r.recommendations %}
 <div class="rec">
-  <h3>{{ loop.index }}. {{ x.code }} {{ x.name }} <span class="meta">{% if x.sector %}{{ x.sector }} · {% endif %}评分 {{ x.score | num(0) }}（趋势 {{ x.factors.trend }} / 动量 {{ x.factors.momentum }} / 量能 {{ x.factors.volume }} / RSI {{ x.factors.rsi }} / 形态 {{ x.factors.pattern }}）</span></h3>
+  <h3>{{ loop.index }}. {{ x.code }} {{ x.name }} <span class="meta">{% if x.sector %}{{ x.sector }} · {% endif %}评分 {{ x.score | num(0) }}（{% for k, v in x.factors.items() %}{{ {'trend':'趋势','momentum':'动量','rs':'相对强弱','volume':'量能','rsi':'RSI','pattern':'形态'}[k] }} {{ v }}{{ " / " if not loop.last }}{% endfor %}）</span></h3>
   <ul>
   {% for reason in x.reasons %}<li>{{ reason }}</li>{% endfor %}
-  <li>关键位：MA20 {{ x.ma20 | num }} ｜ MA50 {{ x.ma50 | num }} ｜ MA200 {{ x.ma200 | num }} ｜ RSI14 {{ x.rsi14 | num(0) }} ｜ 20 日涨幅 {{ x.ret20 | pct(1) }} ｜ ATR {{ x.atr_pct | num(1) }}%</li>
+  <li>关键位：MA20 {{ x.ma20 | num }} ｜ MA50 {{ x.ma50 | num }} ｜ MA200 {{ x.ma200 | num }} ｜ RSI14 {{ x.rsi14 | num(0) }} ｜ 20 日涨幅 {{ x.ret20 | pct(1) }} ｜ 相对基准 {{ x.rs | pct(1) }} ｜ ATR {{ x.atr_pct | num(1) }}%</li>
   <li class="plan">计划：${{ x.entry | num }} 附近买入 {{ x.shares | shares }} 股（约 {{ x.position_value | usd }}，占资金 {{ x.position_pct | num(1) }}%），跌破 ${{ x.stop_loss | num }} 止损，目标 ${{ x.target | num }}</li>
   </ul>
 </div>
@@ -109,7 +114,7 @@
 <p><b>风险提示</b></p>
 <ul>
 <li>异动与推荐均基于历史量价数据的规则计算，不包含基本面、财报、宏观与消息面信息。</li>
-<li>建议仓位按总资金 {{ r.config.recommend.capital | usd }}、单笔风险 {{ r.config.recommend.risk_per_trade_pct }}% 计算，请根据自身情况调整。</li>
+<li>建议仓位按总资金 {{ r.config.recommend.capital | usd }}、单笔风险 {{ r.config.recommend.risk_per_trade_pct }}%、合计仓位不超过 {{ r.config.recommend.max_total_exposure_pct | num(0) }}% 计算，请根据自身情况调整。</li>
 <li>美股无涨跌停限制，财报、指引、宏观数据可能造成隔夜跳空，止损可能无法按计划价格成交。</li>
 <li>本报告不构成任何投资建议，据此操作风险自负。</li>
 </ul>

@@ -12,6 +12,9 @@ on:
         type: choice
         options: [yfinance, stooq, demo]
 
+permissions:
+  contents: write
+
 jobs:
   report:
     runs-on: ubuntu-latest
@@ -40,7 +43,16 @@ jobs:
           WEBHOOK_KIND: ${{ secrets.WEBHOOK_KIND }}
       - name: 运行日报
         run: |
-          python -m daily_report run --config config.yaml --source "${{ github.event.inputs.source || 'yfinance' }}" --notify
+          python -m daily_report run --config config.yaml --source "${{ github.event.inputs.source || 'yfinance' }}" --notify --dump-history snapshot/history.csv
+          cp -r reports snapshot/reports
+      - name: 推送快照到 data-snapshot 分支
+        run: |
+          cd snapshot
+          git init -q && git checkout -q -b data-snapshot
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "snapshot: daily $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data-snapshot
       - uses: actions/upload-artifact@v4
         with:
           name: daily-report-${{ github.run_id }}

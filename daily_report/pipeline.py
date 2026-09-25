@@ -77,6 +77,18 @@ def enrich_panel(hist: pd.DataFrame, cfg: Config) -> dict[str, pd.DataFrame]:
     return out
 
 
+def attach_benchmark(enriched: dict[str, pd.DataFrame], bench_code: str) -> None:
+    """把基准的 ret20 / ret60 按日期对齐到每只股票，列名 bench_ret20 / bench_ret60。"""
+    bench = enriched.get(bench_code)
+    if bench is None:
+        return
+    b = bench[["date", "pct_chg", "ret20", "ret60"]].rename(columns={"pct_chg": "bench_pct_chg", "ret20": "bench_ret20", "ret60": "bench_ret60"})
+    for code, df in enriched.items():
+        if "bench_ret20" in df.columns:
+            continue
+        enriched[code] = df.merge(b, on="date", how="left")
+
+
 def _rec(r: pd.Series) -> dict[str, Any]:
     return {"code": r["code"], "name": r["name"], "pct_chg": round(float(r["pct_chg"]), 2), "close": round(float(r["close"]), 2)}
 
@@ -92,7 +104,8 @@ def build_overview(enriched: dict[str, pd.DataFrame], date: pd.Timestamp, cfg: C
         if code in benchmarks:
             bench_rows.append({"code": code, "name": last["name"], "pct_chg": round(float(last["pct_chg"]), 2), "close": round(float(last["close"]), 2),
                                "ret5": round(float(last["ret5"]), 2) if not np.isnan(last["ret5"]) else None,
-                               "ret20": round(float(last["ret20"]), 2) if not np.isnan(last["ret20"]) else None})
+                               "ret20": round(float(last["ret20"]), 2) if not np.isnan(last["ret20"]) else None,
+                               "closes": [round(float(v), 2) for v in df["close"].iloc[-60:]]})
             continue
         if code in excluded:
             continue
@@ -174,6 +187,8 @@ def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | 
 
     enriched = enrich_panel(hist, cfg)
     benchmarks = {normalize_ticker(t) for t in cfg.data.benchmarks}
+    if cfg.data.benchmarks:
+        attach_benchmark(enriched, normalize_ticker(cfg.data.benchmarks[0]))
     # 基准 ETF 与股票池里标为 ETF 的标的都不参与异动、推荐与个股统计
     etfs = {c for c, df in enriched.items() if str(df["sector"].iloc[-1] if "sector" in df.columns else "") == "ETF"}
     excluded = benchmarks | etfs

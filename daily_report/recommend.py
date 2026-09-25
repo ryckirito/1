@@ -1,11 +1,12 @@
 """推荐建仓：多因子评分 + 交易计划（入场 / 止损 / 目标 / 仓位）。
 
-评分维度（满分 100）：
-- 趋势 30：收盘 > MA50 > MA200（多头排列）且 MA20 向上；历史不足 200 日时退化为 MA20/MA50
-- 动量 20：20 日涨幅落在健康区间（涨太多视为追高）
-- 量能 15：当日温和放量收阳，或缩量回调
-- RSI  15：落在 rsi_low~rsi_high 区间
-- 形态 20：回踩 MA20 附近（低吸）或放量突破 20 日新高（追强）
+每个因子先算成 0~1 的得分，再乘以配置里的权重求和（默认权重合计 100）：
+- 趋势：收盘 > MA50 > MA200（多头排列）且 MA20 向上；历史不足 200 日时退化为 MA20/MA50
+- 动量：20 日涨幅落在健康区间（涨太多视为追高）
+- 相对强弱：rs_window 日内相对基准的超额收益（默认权重 0，可在回测后开启）
+- 量能：当日温和放量收阳，或缩量回调
+- RSI：落在 rsi_low~rsi_high 区间
+- 形态：回踩 MA20 附近（低吸）或放量突破 20 日新高（追强）
 过滤：仙股、流动性不足、波动过大、当日涨跌过大、跳空低开、历史数据不足。
 """
 from __future__ import annotations
@@ -44,7 +45,9 @@ class Recommendation:
     ma200: float = float("nan")
     rsi14: float = 0.0
     ret20: float = 0.0
+    rs: float = float("nan")        # 相对基准超额收益 %
     atr_pct: float = 0.0
+    closes: list[float] = field(default_factory=list)   # 近 60 日收盘，供走势小图
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -62,12 +65,13 @@ def _str(x: Any) -> str:
     return "" if s in ("nan", "None") else s
 
 
-def _clip_score(value: float, lo: float, hi: float, max_points: float) -> float:
+def _ramp(value: float, lo: float, hi: float) -> float:
+    """value 在 [lo, hi] 内线性映射到 0~1。"""
     if np.isnan(value) or value <= lo:
         return 0.0
     if value >= hi:
-        return max_points
-    return max_points * (value - lo) / (hi - lo)
+        return 1.0
+    return (value - lo) / (hi - lo)
 
 
 def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | None:
@@ -104,83 +108,95 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
     factors: dict[str, float] = {}
     reasons: list[str] = []
 
-    # 趋势 30
+    # 趋势 0~1：排列 2/3 + 斜率 1/3
     trend = 0.0
     if not np.isnan(ma200):
         if close > ma50 > ma200:
-            trend += 20
+            trend += 2 / 3
             reasons.append("多头排列：收盘 > MA50 > MA200")
         elif close > ma50 or close > ma200:
-            trend += 8
+            trend += 0.27
     else:
         if close > ma20 > ma50:
-            trend += 14
+            trend += 0.47
             reasons.append("短期多头排列：收盘 > MA20 > MA50")
         elif close > ma50:
-            trend += 6
-    trend += _clip_score(slope20, 0.0, 4.0, 10)
+            trend += 0.2
+    trend += _ramp(slope20, 0.0, 4.0) / 3
     if slope20 > 0:
         reasons.append(f"MA20 近 5 日上行 {slope20:.1f}%")
-    factors["trend"] = round(trend, 1)
 
-    # 动量 20：区间内越靠近中点分越高（10~20 分），超过上限视为过热按超出幅度扣分
+    # 动量 0~1：区间内越靠近中点越高（0.5~1），超过上限按超出幅度递减
     if np.isnan(ret20) or ret20 < cfg.momentum_min_pct:
         momentum = 0.0
     elif ret20 > cfg.momentum_max_pct:
-        momentum = max(0.0, 20 - (ret20 - cfg.momentum_max_pct))
+        momentum = max(0.0, 1 - (ret20 - cfg.momentum_max_pct) / 20)
     else:
         mid = (cfg.momentum_min_pct + cfg.momentum_max_pct) / 2
         half = max(mid - cfg.momentum_min_pct, 1e-9)
-        momentum = 10 + 10 * (1 - abs(ret20 - mid) / half)
+        momentum = 0.5 + 0.5 * (1 - abs(ret20 - mid) / half)
         reasons.append(f"20 日涨幅 {ret20:.1f}%，动量健康")
-    factors["momentum"] = round(momentum, 1)
 
-    # 量能 15
-    volume_pts = 0.0
+    # 相对强弱 0~1：rs_window 日超额收益，0% → 0.3，+10% → 1，负数递减到 0
+    rs_col = "bench_ret60" if cfg.rs_window >= 60 else "bench_ret20"
+    own_col = "ret60" if cfg.rs_window >= 60 else "ret20"
+    rs = _f(row.get(own_col)) - _f(row.get(rs_col))
+    if np.isnan(rs):
+        rs_score = 0.0
+    elif rs >= 0:
+        rs_score = 0.3 + 0.7 * _ramp(rs, 0.0, 10.0)
+    else:
+        rs_score = 0.3 * (1 - _ramp(-rs, 0.0, 10.0))
+    if not np.isnan(rs) and rs > 0 and cfg.w_rs > 0:
+        reasons.append(f"{cfg.rs_window} 日跑赢基准 {rs:.1f}%")
+
+    # 量能 0~1
+    volume_s = 0.0
     if not np.isnan(vr):
         if pct > 0 and 1.2 <= vr <= 3.0:
-            volume_pts = 15
+            volume_s = 1.0
             reasons.append(f"放量上涨，成交量为 20 日均量的 {vr:.1f} 倍")
         elif pct > 0 and 1.0 <= vr < 1.2:
-            volume_pts = 8
+            volume_s = 0.53
         elif pct <= 0 and vr < 0.9:
-            volume_pts = 9
+            volume_s = 0.6
             reasons.append(f"缩量回调，成交量为 20 日均量的 {vr:.0%}")
         elif vr > 3.0 and pct > 0:
-            volume_pts = 6
-    factors["volume"] = round(volume_pts, 1)
+            volume_s = 0.4
 
-    # RSI 15
-    rsi_pts = 0.0
+    # RSI 0~1
+    rsi_s = 0.0
     if cfg.rsi_low <= rsi <= cfg.rsi_high:
-        rsi_pts = 15
+        rsi_s = 1.0
         reasons.append(f"RSI14 = {rsi:.0f}，未超买")
     elif cfg.rsi_low - 8 <= rsi < cfg.rsi_low or cfg.rsi_high < rsi <= cfg.rsi_high + 6:
-        rsi_pts = 7
-    factors["rsi"] = round(rsi_pts, 1)
+        rsi_s = 0.47
 
-    # 形态 20
+    # 形态 0~1
     setup = "趋势跟随"
-    pattern_pts = 0.0
+    pattern_s = 0.0
     dist_ma20 = (close / ma20 - 1) * 100 if not np.isnan(ma20) else float("nan")
     if not np.isnan(dist_ma20) and -1.0 <= dist_ma20 <= cfg.pullback_band_pct and close > ma50 and slope20 > 0:
-        pattern_pts = 20
+        pattern_s = 1.0
         setup = "回踩低吸"
         reasons.append(f"收盘距 MA20 仅 {dist_ma20:+.1f}%，回踩均线支撑")
     elif not np.isnan(hi20) and close > hi20 and pct > 0 and not np.isnan(vr) and vr >= 1.3:
-        pattern_pts = 18
+        pattern_s = 0.9
         setup = "突破追强"
         reasons.append(f"放量突破 20 日高点 {hi20:.2f}")
     elif not np.isnan(dist_ma20) and 0 < dist_ma20 <= 8 and close > ma5:
-        pattern_pts = 10
-    factors["pattern"] = round(pattern_pts, 1)
+        pattern_s = 0.5
 
-    score = trend + momentum + volume_pts + rsi_pts + pattern_pts
+    weights = {"trend": cfg.w_trend, "momentum": cfg.w_momentum, "rs": cfg.w_rs, "volume": cfg.w_volume, "rsi": cfg.w_rsi, "pattern": cfg.w_pattern}
+    raw = {"trend": trend, "momentum": momentum, "rs": rs_score, "volume": volume_s, "rsi": rsi_s, "pattern": pattern_s}
+    for k, w in weights.items():
+        if w > 0:
+            factors[k] = round(raw[k] * w, 1)
+    score = sum(factors.values())
     if score < cfg.min_score:
         return None
 
     # 交易计划
-    # 回踩低吸：挂在 MA20 与收盘之间偏低的位置；其余按收盘价
     entry = close if (setup != "回踩低吸" or close <= ma20) else round(max(ma20, close * 0.99), 2)
     stop_atr = entry - cfg.stop_atr_mult * atr14
     stop = max(stop_atr, low10) if not np.isnan(low10) else stop_atr
@@ -189,14 +205,8 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
     if risk <= 0:
         return None
     target = entry + cfg.reward_risk * risk
-    risk_budget = cfg.capital * cfg.risk_per_trade_pct / 100
-    max_value = cfg.capital * cfg.max_position_pct / 100
-    raw_shares = min(risk_budget / risk, max_value / entry)
-    shares = round(raw_shares, 2) if cfg.fractional_shares else float(int(raw_shares))
-    if shares <= 0:
-        return None
-    position_value = shares * entry
-    return Recommendation(
+    closes = [round(float(v), 2) for v in df["close"].iloc[-60:]]
+    rec = Recommendation(
         code=code,
         name=name,
         date=pd.Timestamp(row["date"]).strftime("%Y-%m-%d"),
@@ -208,9 +218,9 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         target=round(target, 2),
         risk_pct=round(risk / entry * 100, 2),
         reward_risk=cfg.reward_risk,
-        shares=shares,
-        position_value=round(position_value, 2),
-        position_pct=round(position_value / cfg.capital * 100, 2) if cfg.capital else 0.0,
+        shares=0.0,
+        position_value=0.0,
+        position_pct=0.0,
         reasons=reasons,
         factors=factors,
         sector=_str(row.get("sector", "")),
@@ -220,17 +230,47 @@ def score_symbol(df: pd.DataFrame, cfg: RecommendConfig) -> Recommendation | Non
         ma200=round(ma200, 2) if not np.isnan(ma200) else float("nan"),
         rsi14=round(rsi, 1),
         ret20=round(ret20, 2) if not np.isnan(ret20) else float("nan"),
+        rs=round(rs, 2) if not np.isnan(rs) else float("nan"),
         atr_pct=round(atr_pct, 2),
+        closes=closes,
     )
+    return size_position(rec, cfg, cfg.max_position_pct)
+
+
+def size_position(r: Recommendation, cfg: RecommendConfig, cap_pct: float) -> Recommendation:
+    """按风险预算反推股数：min(风险预算 / 单股风险, 仓位上限 / 入场价)。"""
+    risk = r.entry - r.stop_loss
+    risk_budget = cfg.capital * cfg.risk_per_trade_pct / 100
+    max_value = cfg.capital * cap_pct / 100
+    raw_shares = min(risk_budget / risk, max_value / r.entry) if risk > 0 else 0.0
+    shares = round(raw_shares, 2) if cfg.fractional_shares else float(int(raw_shares))
+    r.shares = shares
+    r.position_value = round(shares * r.entry, 2)
+    r.position_pct = round(r.position_value / cfg.capital * 100, 2) if cfg.capital else 0.0
+    return r
 
 
 def recommend_all(enriched: dict[str, pd.DataFrame], cfg: RecommendConfig, exclude: set[str] | None = None) -> list[Recommendation]:
-    out: list[Recommendation] = []
+    scored: list[Recommendation] = []
     for code, df in enriched.items():
         if exclude and code in exclude:
             continue
         r = score_symbol(df, cfg)
         if r is not None:
-            out.append(r)
-    out.sort(key=lambda r: (-r.score, r.risk_pct))
-    return out[: cfg.top_n]
+            scored.append(r)
+    scored.sort(key=lambda r: (-r.score, r.risk_pct))
+    # 板块分散
+    out: list[Recommendation] = []
+    per_sector: dict[str, int] = {}
+    for r in scored:
+        if cfg.max_per_sector > 0 and r.sector:
+            if per_sector.get(r.sector, 0) >= cfg.max_per_sector:
+                continue
+            per_sector[r.sector] = per_sector.get(r.sector, 0) + 1
+        out.append(r)
+        if len(out) >= cfg.top_n:
+            break
+    # 单只仓位上限：min(max_position_pct, 总仓位上限 / 推荐条数)
+    cap = min(cfg.max_position_pct, cfg.max_total_exposure_pct / max(1, cfg.top_n))
+    out = [size_position(r, cfg, cap) for r in out]
+    return [r for r in out if r.shares > 0]

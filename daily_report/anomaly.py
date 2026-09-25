@@ -26,6 +26,8 @@ class Anomaly:
     direction: str = "neutral"   # up | down | neutral
     sector: str = ""
     market_cap: float = float("nan")
+    excess_pct: float = float("nan")   # 相对基准的超额涨跌幅
+    closes: list[float] = field(default_factory=list)   # 近 60 日收盘，供走势小图
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -135,6 +137,30 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
         details.append(f"当日收益率 z-score {z:+.1f}（相对近 {cfg.zscore_window} 日）")
         score += 8
 
+    # 相对大盘：个股涨跌幅减去基准涨跌幅
+    bench_pct = _f(row.get("bench_pct_chg"))
+    excess = pct - bench_pct if not np.isnan(bench_pct) else float("nan")
+    if not np.isnan(excess):
+        if excess >= cfg.excess_pct:
+            tags.append("跑赢大盘")
+            details.append(f"跑赢基准 {excess:.2f} 个百分点")
+            score += 8
+        elif excess <= -cfg.excess_pct:
+            tags.append("跑输大盘")
+            details.append(f"跑输基准 {abs(excess):.2f} 个百分点")
+            score += 8
+
+    # 连涨 / 连跌
+    st = int(_f(row.get("streak")) or 0)
+    if st >= cfg.streak_days:
+        tags.append(f"{st}连涨")
+        details.append(f"已连续上涨 {st} 个交易日")
+        score += 6 + min(6, st - cfg.streak_days)
+    elif st <= -cfg.streak_days:
+        tags.append(f"{-st}连跌")
+        details.append(f"已连续下跌 {-st} 个交易日")
+        score += 6 + min(6, -st - cfg.streak_days)
+
     if not tags or score < cfg.min_score:
         return None
 
@@ -153,6 +179,8 @@ def detect_symbol(df: pd.DataFrame, cfg: AnomalyConfig) -> Anomaly | None:
         direction=direction,
         sector=_str(row.get("sector", "")),
         market_cap=_f(row.get("market_cap")),
+        excess_pct=round(excess, 2) if not np.isnan(excess) else float("nan"),
+        closes=[round(float(v), 2) for v in df["close"].iloc[-60:]],
     )
 
 

@@ -70,3 +70,27 @@ def test_detect_all_sorted_and_excludes_benchmarks():
     out = detect_all({"MSFT": quiet, "NVDA": hot, "SPY": spy}, AnomalyConfig(), exclude={"SPY"})
     assert [a.code for a in out] == ["NVDA"]
     assert not np.isnan(out[0].vol_ratio)
+
+
+def test_excess_vs_benchmark_and_streak():
+    import pandas as pd
+    from daily_report.pipeline import attach_benchmark
+
+    stock = make_history(code="NVDA", seed=7)
+    spy = make_history(code="SPY", seed=8, sector="ETF")
+    prev = stock["close"].iloc[-2]
+    stock = _last(stock, open=prev, close=prev * 1.06, high=prev * 1.065, low=prev)
+    panel = {"NVDA": enrich(stock), "SPY": enrich(spy)}
+    attach_benchmark(panel, "SPY")
+    a = detect_symbol(panel["NVDA"], AnomalyConfig())
+    assert a is not None and "跑赢大盘" in a.tags and a.excess_pct > 4 and len(a.closes) == 60
+
+    # 连涨 6 日
+    up = make_history(code="AAPL", seed=9)
+    for k in range(6, 0, -1):
+        i = len(up) - k
+        up.at[i, "close"] = up.at[i - 1, "close"] * 1.004
+        up.at[i, "high"] = up.at[i, "close"] * 1.005
+        up.at[i, "low"] = up.at[i, "close"] * 0.995
+    a2 = detect_symbol(enrich(up), AnomalyConfig(min_score=0))
+    assert a2 is not None and "6连涨" in a2.tags

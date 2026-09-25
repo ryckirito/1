@@ -37,6 +37,35 @@ def fmt_shares(value: float) -> str:
     return f"{value:g}" if float(value).is_integer() else f"{value:.2f}"
 
 
+def sparkline(closes: list[float], width: int = 120, height: int = 32) -> str:
+    """近 N 日收盘价走势的内联 SVG：2px 折线 + 淡面积 + 终点标记，颜色按区间涨跌取语义色。"""
+    vals = [float(v) for v in (closes or []) if v == v]
+    if len(vals) < 2:
+        return ""
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1.0
+    pad = 3
+    n = len(vals)
+    pts = []
+    for i, v in enumerate(vals):
+        x = pad + (width - 2 * pad) * i / (n - 1)
+        y = pad + (height - 2 * pad) * (1 - (v - lo) / span)
+        pts.append((round(x, 1), round(y, 1)))
+    line = " ".join(f"{x},{y}" for x, y in pts)
+    area = f"{pts[0][0]},{height - pad} " + line + f" {pts[-1][0]},{height - pad}"
+    cls = "up" if vals[-1] >= vals[0] else "down"
+    chg = (vals[-1] / vals[0] - 1) * 100 if vals[0] else 0.0
+    title = f"近 {n} 日：{vals[0]:.2f} → {vals[-1]:.2f}（{chg:+.1f}%），区间 {lo:.2f}~{hi:.2f}"
+    ex, ey = pts[-1]
+    return (
+        f'<svg class="spark {cls}" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-label="{title}">'
+        f"<title>{title}</title>"
+        f'<polygon class="area" points="{area}"/>'
+        f'<polyline class="line" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="{line}"/>'
+        f'<circle class="dot" cx="{ex}" cy="{ey}" r="3"/></svg>'
+    )
+
+
 def _env() -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -48,6 +77,7 @@ def _env() -> Environment:
     env.filters["num"] = fmt_num
     env.filters["pct"] = fmt_pct
     env.filters["shares"] = fmt_shares
+    env.filters["spark"] = sparkline
     return env
 
 

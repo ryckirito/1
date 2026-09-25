@@ -48,6 +48,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--notify", action="store_true", help="生成后推送到配置的 webhook")
     run.add_argument("--print", dest="print_md", action="store_true", help="同时把 Markdown 打印到终端")
 
+    bt = sub.add_parser("backtest", help="回测推荐信号：历史上每日按同样规则选股，统计之后 N 日表现")
+    bt.add_argument("-c", "--config", help="YAML 配置文件路径")
+    bt.add_argument("-s", "--source", choices=["demo", "csv", "yfinance", "stooq"], help="数据源，覆盖配置文件")
+    bt.add_argument("--csv-dir", help="csv 数据源目录")
+    bt.add_argument("-d", "--date", type=_parse_date, help="数据截止日期（默认今天）")
+    bt.add_argument("--days", type=int, default=120, help="回测多少个交易日")
+    bt.add_argument("--horizon", type=int, default=20, help="持有多少个交易日")
+    bt.add_argument("--benchmark", help="基准代码，默认配置中的第一个 benchmark")
+    bt.add_argument("--trades", help="把每笔推荐明细写到该 CSV")
+
     gen = sub.add_parser("gen-demo", help="生成一份合成行情 CSV，便于试用 csv 数据源")
     gen.add_argument("-o", "--out", default="data/csv", help="输出目录")
     gen.add_argument("-n", "--symbols", type=int, default=60)
@@ -80,6 +90,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    from .backtest import format_result, run_backtest
+    from .data import make_provider
+
+    cfg = load_config(args.config, {"data": {"source": args.source, "csv_dir": args.csv_dir}})
+    end = args.date or dt.date.today()
+    start = end - dt.timedelta(days=cfg.data.history_days + int(args.days * 1.6))
+    hist = make_provider(cfg.data).load_history(end=end, start=start)
+    res = run_backtest(cfg, hist, days=args.days, horizon=args.horizon, benchmark=args.benchmark)
+    print(format_result(res))
+    if args.trades and res.trades is not None:
+        Path(args.trades).parent.mkdir(parents=True, exist_ok=True)
+        res.trades.to_csv(args.trades, index=False)
+        print(f"明细已写入 {args.trades}")
+    return 0
+
+
 def cmd_gen_demo(args: argparse.Namespace) -> int:
     from .data.demo import DemoProvider
 
@@ -103,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.cmd == "run":
         return cmd_run(args)
+    if args.cmd == "backtest":
+        return cmd_backtest(args)
     if args.cmd == "gen-demo":
         return cmd_gen_demo(args)
     return 1

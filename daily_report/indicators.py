@@ -59,6 +59,16 @@ def rolling_zscore(series: pd.Series, window: int) -> pd.Series:
     return (series - mean) / std.replace(0, np.nan)
 
 
+def streak(close: pd.Series) -> pd.Series:
+    """连涨（正）/ 连跌（负）天数。"""
+    sign = np.sign(close.diff()).fillna(0).astype(int)
+    out = np.zeros(len(sign), dtype=int)
+    for i in range(1, len(sign)):
+        s = sign.iloc[i]
+        out[i] = out[i - 1] + s if s != 0 and np.sign(out[i - 1]) in (0, s) else s
+    return pd.Series(out, index=close.index)
+
+
 def enrich(
     df: pd.DataFrame,
     *,
@@ -95,5 +105,7 @@ def enrich(
     out["ret_z"] = rolling_zscore(out["pct_chg"], zscore_window)
     out["ret20"] = (close / close.shift(20) - 1) * 100.0
     out["ret5"] = (close / close.shift(5) - 1) * 100.0
+    out["ret60"] = (close / close.shift(60) - 1) * 100.0
     out["low10"] = out["low"].rolling(10, min_periods=5).min()
+    out["streak"] = streak(close)
     return out

@@ -25,6 +25,8 @@ anomaly:
   amplitude_pct: 6.0         # 振幅阈值（%）
   zscore_window: 60
   zscore_threshold: 3.0
+  excess_pct: 4.0            # 相对 SPY 超额涨跌幅阈值（%）
+  streak_days: 5             # 连涨/连跌天数阈值
   min_score: 10              # 异动强度门槛，安静日只显示真正的异动
   max_items: 40
 
@@ -33,22 +35,32 @@ recommend:
   risk_per_trade_pct: 1.0    # 单笔最大亏损占总资金 %
   max_position_pct: 15.0     # 单只最大仓位 %
   top_n: 10
-  min_score: 60
+  min_score: 70              # 回测显示 70 分以上超额收益明显更好
   min_price: 5               # 股价下限，过滤仙股
   min_avg_dollar_volume: 20000000   # 20 日均成交额下限（美元）
-  max_atr_pct: 5.0
+  max_atr_pct: 7.0           # 5 会把强势高波动股全部剔除
   rsi_low: 45
   rsi_high: 72
   momentum_window: 20
   momentum_min_pct: 0
-  momentum_max_pct: 25
+  momentum_max_pct: 40
   pullback_band_pct: 3.0
-  stop_atr_mult: 2.0
-  min_stop_pct: 3.0
+  stop_atr_mult: 3.0         # 止损 = 收盘 - 3×ATR（与 10 日最低取高者）
+  min_stop_pct: 6.0          # 止损至少 6%，3% 在 20 日持有期内一半会被震出
   reward_risk: 2.0
   max_daily_gain_pct: 6.0
   max_daily_loss_pct: 4.0
   exclude_gap_down: true
+  # 因子权重，合计 100；rs 为相对 SPY 的 rs_window 日超额收益
+  w_trend: 25
+  w_momentum: 15
+  w_rs: 15
+  w_volume: 15
+  w_rsi: 10
+  w_pattern: 20
+  rs_window: 20
+  max_per_sector: 0          # 每个板块最多几只，0 不限（回测中限制板块略降收益，按风险偏好选择）
+  max_total_exposure_pct: 100  # 全部推荐合计仓位上限，单只上限 = min(max_position_pct, 该值/top_n)
   fractional_shares: false   # 券商支持碎股时可改为 true
 
 report:

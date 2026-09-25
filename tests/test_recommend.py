@@ -87,3 +87,17 @@ def test_recommend_all_top_n_and_exclude():
     panel = {c: enrich(_uptrend(code=c, seed=i)) for i, c in enumerate(["AAPL", "MSFT", "GOOGL", "SPY"])}
     out = recommend_all(panel, cfg, exclude={"SPY"})
     assert len(out) == 2 and out[0].score >= out[1].score and all(r.code != "SPY" for r in out)
+
+
+def test_sector_cap_and_total_exposure():
+    cfg = RecommendConfig(min_score=0, top_n=4, max_per_sector=1, max_total_exposure_pct=40, max_position_pct=15)
+    panel = {c: enrich(_uptrend(code=c, seed=i)) for i, c in enumerate(["AAPL", "MSFT", "GOOGL", "AMZN"])}
+    out = recommend_all(panel, cfg)
+    # 全部同板块（Technology），只能留 1 只
+    assert len(out) == 1
+    # 单只仓位上限 = min(15, 40/4) = 10%
+    assert out[0].position_pct <= 10.0 + 1e-9
+    cfg2 = RecommendConfig(min_score=0, top_n=4, max_total_exposure_pct=100, max_position_pct=15)
+    out2 = recommend_all(panel, cfg2)
+    assert len(out2) == 4 and all(r.position_pct <= 15.0 + 1e-9 for r in out2)
+    assert all(len(r.closes) == 60 for r in out2)
