@@ -101,3 +101,28 @@ def test_sector_cap_and_total_exposure():
     out2 = recommend_all(panel, cfg2)
     assert len(out2) == 4 and all(r.position_pct <= 15.0 + 1e-9 for r in out2)
     assert all(len(r.closes) == 60 for r in out2)
+
+
+def test_new_factors_rank_mode_and_regime():
+    import numpy as np
+    from daily_report.pipeline import attach_benchmark
+
+    panel = {c: enrich(_uptrend(code=c, seed=i)) for i, c in enumerate(["AAPL", "MSFT", "GOOGL"])}
+    spy = make_history(code="SPY", seed=11, sector="ETF")
+    panel["SPY"] = enrich(spy)
+    attach_benchmark(panel, "SPY")
+    cfg = RecommendConfig(min_score=0, w_mom12=10, w_smooth=10, w_near_high=10, w_trend=20, w_momentum=10, w_rs=15, w_volume=10, w_rsi=5, w_pattern=10)
+    out = recommend_all(panel, cfg, exclude={"SPY"})
+    assert out and {"mom12", "smooth", "near_high"} <= set(out[0].factors)
+    assert all(0 <= v <= 10 + 1e-9 for r in out for k, v in r.factors.items() if k in ("mom12", "smooth", "near_high"))
+    # 截面排名模式：rs 得分为 0~1 百分位乘以权重
+    cfg_rank = RecommendConfig(min_score=0, rank_mode=True)
+    out_rank = recommend_all(panel, cfg_rank, exclude={"SPY"})
+    assert out_rank and all(0 <= r.factors["rs"] <= cfg_rank.w_rs + 1e-9 for r in out_rank)
+    # 环境过滤：把基准压到 MA200 之下
+    for code, df in panel.items():
+        df["bench_bull"] = 0.0
+    assert recommend_all(panel, RecommendConfig(min_score=0, regime_filter="skip"), exclude={"SPY"}) == []
+    halved = recommend_all(panel, RecommendConfig(min_score=0, regime_filter="halve", top_n=2), exclude={"SPY"})
+    assert len(halved) == 1
+    assert len(recommend_all(panel, RecommendConfig(min_score=0, regime_filter="off", top_n=2), exclude={"SPY"})) == 2

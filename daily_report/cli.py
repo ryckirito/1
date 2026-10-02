@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--days", type=int, default=120, help="回测多少个交易日")
     bt.add_argument("--horizon", type=int, default=20, help="持有多少个交易日")
     bt.add_argument("--benchmark", help="基准代码，默认配置中的第一个 benchmark")
+    bt.add_argument("--blocks", type=int, default=4, help="按时间分成几段统计")
     bt.add_argument("--trades", help="把每笔推荐明细写到该 CSV")
 
     gen = sub.add_parser("gen-demo", help="生成一份合成行情 CSV，便于试用 csv 数据源")
@@ -99,7 +100,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     end = args.date or dt.date.today()
     start = end - dt.timedelta(days=cfg.data.history_days + int(args.days * 1.6))
     hist = make_provider(cfg.data).load_history(end=end, start=start)
-    res = run_backtest(cfg, hist, days=args.days, horizon=args.horizon, benchmark=args.benchmark)
+    res = run_backtest(cfg, hist, days=args.days, horizon=args.horizon, benchmark=args.benchmark, blocks=args.blocks)
     print(format_result(res))
     if args.trades and res.trades is not None:
         Path(args.trades).parent.mkdir(parents=True, exist_ok=True)

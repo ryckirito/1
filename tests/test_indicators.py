@@ -39,3 +39,12 @@ def test_market_helpers():
     assert is_valid_ticker("AAPL") and is_valid_ticker("BRK-B") and not is_valid_ticker("AAPL^A") and not is_valid_ticker("")
     assert stooq_symbol("BRK.B") == "brk-b.us"
     assert fmt_usd(1.23e9) == "$1.23B" and fmt_usd(4.5e6) == "$4.5M" and fmt_usd(float("nan")) == "-"
+
+
+def test_new_indicator_columns():
+    df = enrich(make_history(days=300, drift=0.002, vol=0.005, seed=12))
+    last = df.iloc[-1]
+    assert not np.isnan(last["mom12_1"]) and not np.isnan(last["trend_corr60"]) and not np.isnan(last["dist_hi_long"])
+    assert last["trend_corr60"] > 0.8        # 稳步上行
+    assert last["dist_hi_long"] <= 0.0 + 1e-9 or last["close"] > df["hi_long"].iloc[-1]
+    assert np.isnan(enrich(make_history(days=100))["mom12_1"].iloc[-1])

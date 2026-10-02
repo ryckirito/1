@@ -10,3 +10,5 @@ config.yaml
 .env
 data/snapshot/
 data/snapshot_csv/
+data/research/
+data/research_csv/

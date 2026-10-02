@@ -18,9 +18,13 @@ def test_backtest_on_demo_data():
     assert res.trades is not None and {"date", "code", "ret", "excess", "hit_stop"} <= set(res.trades.columns)
     # 推荐日期不能晚于可观察期末
     assert res.trades["date"].max() < end.isoformat()
+    assert res.portfolio is not None and res.portfolio.max_drawdown <= 0 and 0 <= res.portfolio.avg_exposure <= 100
+    assert res.portfolio.equity is not None and len(res.portfolio.equity) == 15 + 5
+    assert len(res.by_period) == 4
     text = format_result(res)
-    assert "回测区间" in text and "按形态" in text
-    assert "trades" not in res.to_dict()
+    assert "回测区间" in text and "按形态" in text and "组合" in text and "按时间分段" in text
+    d = res.to_dict()
+    assert "trades" not in d and "equity" not in d["portfolio"]
 
 
 def test_sparkline_svg():
