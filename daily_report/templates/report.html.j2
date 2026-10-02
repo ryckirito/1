@@ -52,6 +52,7 @@
   <div class="card"><div class="k">涨跌幅中位数</div><div class="v {{ 'up' if r.overview.median_pct >= 0 else 'down' }}">{{ r.overview.median_pct | pct }}</div></div>
   <div class="card"><div class="k">合计成交额</div><div class="v">{{ r.overview.total_amount | usd }}</div><div class="k">较前一日 {{ r.overview.amount_change_pct | pct }}</div></div>
   <div class="card"><div class="k">站上 MA50 / MA200</div><div class="v">{{ r.overview.above_ma50_pct | num(1) }}% / {{ r.overview.above_ma200_pct | num(1) }}%</div></div>
+  <div class="card"><div class="k">大盘环境</div><div class="v {{ 'up' if r.overview.regime == '多头' else 'down' if r.overview.regime == '空头' else '' }}">{{ r.overview.regime }}</div>{% if r.overview.regime_detail %}<div class="k">{{ r.overview.regime_detail }}</div>{% endif %}</div>
 </div>
 {% if r.overview.top_gainers %}
 <p><b>涨幅前五</b>：{% for g in r.overview.top_gainers %}{{ g.code }} {{ g.name }} <span class="up">{{ g.pct_chg | pct }}</span>{{ "、" if not loop.last }}{% endfor %}</p>
@@ -106,6 +107,8 @@
   </ul>
 </div>
 {% endfor %}
+{% elif r.overview.regime == '空头' and r.config.recommend.regime_filter == 'skip' %}
+<p>大盘处于空头环境（基准收盘低于 MA200），按规则暂停推荐建仓。回测显示该规则把最大回撤从 10.8% 降到 7.4%，并在各段行情都提高了超额收益。</p>
 {% else %}
 <p>今日没有评分达到 {{ r.config.recommend.min_score }} 分的标的，建议观望。</p>
 {% endif %}

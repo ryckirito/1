@@ -21,6 +21,7 @@ def build_summary(report: DailyReport, max_anomalies: int = 8, max_recs: int = 5
     ]
     if bench:
         lines.append(f"基准：{bench}")
+    lines.append(f"大盘环境：{o.regime}{'（' + o.regime_detail + '）' if o.regime_detail else ''}")
     lines += ["", f"**异动 TOP{min(max_anomalies, len(report.anomalies))}**"]
     for a in report.anomalies[:max_anomalies]:
         lines.append(f"- {a.code} {a.name} {fmt_pct(a.pct_chg)} · {'/'.join(a.tags)}")

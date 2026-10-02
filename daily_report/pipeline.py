@@ -15,7 +15,7 @@ from .config import Config
 from .data import make_provider
 from .indicators import enrich
 from .market import normalize_ticker
-from .recommend import Recommendation, recommend_all
+from .recommend import Recommendation, market_regime, recommend_all
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,8 @@ class MarketOverview:
     above_ma50_pct: float         # 收盘站上 MA50 的比例
     above_ma200_pct: float        # 收盘站上 MA200 的比例（历史足够时）
     benchmarks: list[dict[str, Any]] = field(default_factory=list)   # SPY / QQQ 等
+    regime: str = "未知"             # 多头 / 空头 / 未知：基准收盘是否在 MA200 之上
+    regime_detail: str = ""
     top_gainers: list[dict[str, Any]] = field(default_factory=list)
     top_losers: list[dict[str, Any]] = field(default_factory=list)
     sectors: list[dict[str, Any]] = field(default_factory=list)      # 板块平均涨跌幅
@@ -199,6 +201,20 @@ def run_pipeline(cfg: Config, date: dt.date | None = None, hist: pd.DataFrame | 
     anomalies = detect_all(enriched, cfg.anomaly, exclude=excluded)[: cfg.anomaly.max_items]
     recs = recommend_all(enriched, cfg.recommend, exclude=excluded)
     overview = build_overview(enriched, report_date, cfg, benchmarks, excluded)
+    bull = market_regime(enriched)
+    if bull is not None and cfg.data.benchmarks:
+        bcode = normalize_ticker(cfg.data.benchmarks[0])
+        bdf = enriched.get(bcode)
+        overview.regime = "多头" if bull else "空头"
+        if bdf is not None:
+            last = bdf.iloc[-1]
+            ref = last["ma200"] if not np.isnan(last["ma200"]) else last["ma50"]
+            ref_name = "MA200" if not np.isnan(last["ma200"]) else "MA50"
+            overview.regime_detail = f"{bcode} 收盘 {last['close']:.2f}，{ref_name} {ref:.2f}（{(last['close'] / ref - 1) * 100:+.1f}%）"
+        if not bull and cfg.recommend.regime_filter == "skip":
+            overview.regime_detail += "；按规则暂停推荐建仓"
+        elif not bull and cfg.recommend.regime_filter == "halve":
+            overview.regime_detail += "；按规则推荐条数减半"
     log.info("异动 %d 条，推荐 %d 条", len(anomalies), len(recs))
     return DailyReport(
         date=report_date.strftime("%Y-%m-%d"),

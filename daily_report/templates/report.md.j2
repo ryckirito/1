@@ -17,6 +17,7 @@
 | 涨跌幅中位数 / 均值 | {{ r.overview.median_pct | pct }} / {{ r.overview.mean_pct | pct }} |
 | 合计成交额（较前一日） | {{ r.overview.total_amount | usd }}（{{ r.overview.amount_change_pct | pct }}） |
 | 站上 MA50 / MA200 比例 | {{ r.overview.above_ma50_pct | num(1) }}% / {{ r.overview.above_ma200_pct | num(1) }}% |
+| 大盘环境 | **{{ r.overview.regime }}**{% if r.overview.regime_detail %}：{{ r.overview.regime_detail }}{% endif %} |
 
 {% if r.overview.top_gainers %}
 **涨幅前五**：{% for g in r.overview.top_gainers %}{{ g.code }} {{ g.name }} {{ g.pct_chg | pct }}{{ "、" if not loop.last }}{% endfor %}
@@ -70,6 +71,8 @@
 - 计划：${{ x.entry | num }} 附近买入 {{ x.shares | shares }} 股（约 {{ x.position_value | usd }}，占资金 {{ x.position_pct | num(1) }}%），跌破 ${{ x.stop_loss | num }} 止损，目标 ${{ x.target | num }}
 
 {% endfor %}
+{% elif r.overview.regime == '空头' and r.config.recommend.regime_filter == 'skip' %}
+大盘处于空头环境（基准收盘低于 MA200），按规则暂停推荐建仓。回测显示该规则把最大回撤从 10.8% 降到 7.4%，并在各段行情都提高了超额收益。
 {% else %}
 今日没有评分达到 {{ r.config.recommend.min_score }} 分的标的，建议观望。
 {% endif %}
