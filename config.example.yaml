@@ -51,14 +51,19 @@ recommend:
   max_daily_gain_pct: 6.0
   max_daily_loss_pct: 4.0
   exclude_gap_down: true
-  # 因子权重，合计 100；rs 为相对 SPY 的 rs_window 日超额收益
+  # 因子权重（合计 105，评分门槛 70 按此标定）；rs 为相对 SPY 的 rs_window 日超额收益，mom12 为 12 个月剔除最近 1 个月的长期动量
   w_trend: 25
-  w_momentum: 15
+  w_momentum: 10
   w_rs: 15
-  w_volume: 15
+  w_mom12: 15
+  w_volume: 10
   w_rsi: 10
   w_pattern: 20
+  w_smooth: 0                # 趋势平滑度（回测无改善，默认关闭）
+  w_near_high: 0             # 接近 52 周高点（回测无改善，默认关闭）
   rs_window: 20
+  rank_mode: false           # true 则相对强弱 / 长期动量按当日截面百分位打分（回测无改善）
+  regime_filter: skip        # off | halve | skip：SPY 收盘跌破 MA200 时推荐减半 / 暂停。回测中唯一在各段行情都提升超额并降低回撤的规则
   max_per_sector: 0          # 每个板块最多几只，0 不限（回测中限制板块略降收益，按风险偏好选择）
   max_total_exposure_pct: 100  # 全部推荐合计仓位上限，单只上限 = min(max_position_pct, 该值/top_n)
   fractional_shares: false   # 券商支持碎股时可改为 true

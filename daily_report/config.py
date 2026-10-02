@@ -46,17 +46,17 @@ class RecommendConfig:
     pullback_band_pct: float = 3.0      # 收盘价距 MA20 在该带宽内视为回踩支撑
     # 各因子权重（0~1 的因子得分乘以权重，合计即总分；默认合计 100）
     w_trend: float = 25.0
-    w_momentum: float = 15.0
+    w_momentum: float = 10.0
     w_rs: float = 15.0                  # 相对基准强弱（rs_window 日超额收益）
-    w_volume: float = 15.0
+    w_volume: float = 10.0
     w_rsi: float = 10.0
     w_pattern: float = 20.0
     rs_window: int = 20                 # 相对强弱回看天数（20 或 60）
-    w_mom12: float = 0.0                # 长期动量（12 个月剔除最近 1 个月）
+    w_mom12: float = 15.0               # 长期动量（12 个月剔除最近 1 个月）。权重合计 105，评分门槛 70 按此标定
     w_smooth: float = 0.0               # 趋势平滑度（60 日 log 价格与时间的相关系数）
     w_near_high: float = 0.0            # 接近 52 周高点
     rank_mode: bool = False             # True：相对强弱 / 长期动量按当日截面百分位打分，而非绝对阈值
-    regime_filter: str = "off"          # off | halve | skip：基准跌破 MA200 时推荐条数减半 / 不推荐
+    regime_filter: str = "skip"         # off | halve | skip：基准跌破 MA200 时推荐条数减半 / 不推荐。回测：skip 把最大回撤从 10.8% 降到 7.4%
     max_per_sector: int = 0             # 每个板块最多推荐几只，0 不限制
     max_total_exposure_pct: float = 100.0  # 全部推荐合计仓位上限，用于给单只仓位封顶
     stop_atr_mult: float = 3.0          # 止损 = 收盘 - N*ATR（与 10 日最低价取高者）
